@@ -1,0 +1,19 @@
+{
+    "name": "test_actionset",
+    "actions": [
+        {
+            "name": "Foobar",
+            "function": "foo",
+            "context_fetcher": "bar",
+            "priority": 1.0,
+            "considerations": [
+                {
+                    "consideration": "bazify",
+                    "min": 0.0,
+                    "max": 1.0,
+                    "curve": "curve_linear"
+                }
+            ]
+        }
+    ]
+}
