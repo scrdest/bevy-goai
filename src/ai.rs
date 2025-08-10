@@ -6,10 +6,8 @@ use crate::smart_object::SmartObject;
 // AI Agent Core
 // The AIController is the main 'something running AI calculations' component.
 // 
-#[derive(Component)]
-pub struct AIController {
-    current_action: Option<CurrentAction>,
-}
+#[derive(Component, Default)]
+pub struct AIController {}
 
 // fn decision_loop(
 //     mut query: Query<(Entity, &AIController)>,

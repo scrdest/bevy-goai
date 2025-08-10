@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 
-use bevy::reflect::{TypeRegistry, TypeData};
+use bevy::prelude::*;
+use bevy::{ecs::reflect::AppFunctionRegistry, reflect::{func::FunctionRegistry, TypeData, TypeRegistry}};
 use crate::errors::DynResolutionError;
 
 
@@ -30,16 +31,44 @@ impl<T: Borrow<str>> TypeRegistryIdentifierRecoverable for T {
     }
 }
 
+pub enum ReflectTypeRegistry<'a> {
+    Type(&'a TypeRegistry),
+    Func(&'a FunctionRegistry),
+    AppFunc(Res<'a, AppFunctionRegistry>),
+}
+
+impl<'a> From<&'a TypeRegistry> for ReflectTypeRegistry<'a> {
+    fn from(value: &'a TypeRegistry) -> Self {
+        Self::Type(value)
+    }
+}
+
+impl<'a> From<&'a FunctionRegistry> for ReflectTypeRegistry<'a> {
+    fn from(value: &'a FunctionRegistry) -> Self {
+        Self::Func(value)
+    }
+}
+
+impl<'a> From<Res<'a, AppFunctionRegistry>> for ReflectTypeRegistry<'a> {
+    fn from(value: Res<'a, AppFunctionRegistry>) -> Self {
+        Self::AppFunc(value)
+    }
+}
+
 
 pub trait TypeRegistryIdentifier: TypeRegistryIdentifierBuildable + TypeRegistryIdentifierRecoverable {
     /// This trait effectively represents a newtype wrapper holding a String that *provably* represents some *registered* type. 
     /// In other words, to get an instance of the String wrapper, we must pass a check-in with some type registry.
 
-    fn from_string_identifier(value: String, registry: &TypeRegistry) -> Result<Self, DynResolutionError> {
-        let retrieved = registry.get_with_type_path(&value);
+    fn from_string_identifier(value: String, registry: &ReflectTypeRegistry) -> Result<Self, DynResolutionError> {
+        let retrieved = match registry {
+            ReflectTypeRegistry::Type(type_registry) => type_registry.get_with_type_path(&value).is_some(),
+            ReflectTypeRegistry::Func(func_registry) => func_registry.get(&value).is_some(),
+            ReflectTypeRegistry::AppFunc(func_registry) => func_registry.read().get(&value).is_some(),
+        };
         match retrieved {
-            None => Err(DynResolutionError::NotInRegistry(value.to_owned())),
-            Some(_) => Ok(Self::build_from_string(value))
+            false => Err(DynResolutionError::NotInRegistry(value.to_owned())),
+            true => Ok(Self::build_from_string(value))
         }
     }
 }

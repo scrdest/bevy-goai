@@ -1,12 +1,14 @@
 // Actions
 
 use std::borrow::Borrow;
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 use bevy::reflect::func::ArgList;
 use bevy::reflect::{List};
-use bevy::reflect::{Reflect, DynamicList, DynamicMap, func::FunctionRegistry, func::DynamicFunction};
+use bevy::reflect::{Reflect, func::FunctionRegistry, func::DynamicFunction};
 use serde::{Serialize, Deserialize};
+use crate::arg_values::ContextValue;
 use crate::errors::{DynResolutionError};
 use crate::type_registry::{TypeRegistryIdentifier, TypeRegistryIdentifierFor};
 use crate::utility_concepts::{ContextFetcherIdentifier, CurveIdentifier, ConsiderationIdentifier};
@@ -27,6 +29,13 @@ impl Borrow<str> for DynFuncName {
         self.0.borrow()
     }
 }
+
+impl Borrow<str> for &DynFuncName {
+    fn borrow(&self) -> &str {
+        self.0.borrow()
+    }
+}
+
 impl TypeRegistryIdentifier for DynFuncName {}
 
 
@@ -34,8 +43,10 @@ impl TypeRegistryIdentifier for DynFuncName {}
 pub struct ConsiderationData {
     #[serde(rename="consideration")]
     func_name: ConsiderationIdentifier,
+
     #[serde(rename="curve")]
     curve_name: CurveIdentifier,
+
     min: f32,
     max: f32,
 }
@@ -47,18 +58,20 @@ struct RunnableConsideration<'a, 'b: 'a> {
     max: f32,
 }
 
+type ActionContext = HashMap<String, ContextValue>;
+
 pub(crate) struct Action {
     /// A GOAI action is effectively an ActionTemplate + a selected Context. 
     /// 
-    name: String,
-    func: DynFuncName,
-    context: DynamicMap,
+    pub(crate) name: String,
+    pub(crate) func: DynFuncName,
+    pub(crate) context: ActionContext,
 }
 
 pub(crate) struct ScoredAction {
     /// 
-    action: Action,
-    score: f32,
+    pub(crate) action: Action,
+    pub(crate) score: f32,
 }
 
 
@@ -111,13 +124,13 @@ impl ActionTemplate  {
         self.try_resolve_action_function(curve_name, registry).expect("Failed to resolve dynamic Curve function from a name!")
     }
 
-    fn get_contexts(&self, registry: &FunctionRegistry) -> DynamicList {
+    fn get_contexts(&self, registry: &FunctionRegistry) -> Vec<ActionContext> {
         // todo: error-handling
         // todo: put world n' stuff into arglist
         let context_fetcher = self.resolve_context_fetcher(registry);
         let args = ArgList::new();
         let result = context_fetcher.call(args).unwrap().unwrap_owned();
-        let output: DynamicList = result.try_take().unwrap();
+        let output: Vec<ActionContext> = result.try_take().unwrap();
         output
     }
 
@@ -148,7 +161,9 @@ impl ActionTemplate  {
             let mut ignored: bool = false;
 
             for consideration in callable_considerations.iter() {
-                let args = ArgList::new().with_ref(context);
+                let args = ArgList::new()
+                    .with_ref(context)
+                ;
                 let dyn_score = consideration.func.call(args).unwrap().unwrap_owned();
                 let cast_score = dyn_score.try_take();
 
@@ -174,7 +189,7 @@ impl ActionTemplate  {
         match best_ctx {
             None => None,
             Some(ctx) => {
-                let context: DynamicMap =  ctx.to_dynamic().try_take().unwrap();
+                let context: ActionContext =  ctx.to_dynamic().try_take().unwrap();
                 let name = self.name.to_owned();
                 let func = self.function.to_owned();
                 let action = Action {
