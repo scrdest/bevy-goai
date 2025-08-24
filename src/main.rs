@@ -5,6 +5,7 @@ pub mod action_runtime;
 pub mod arg_values;
 pub mod brain;
 mod errors;
+pub mod events;
 pub mod utility_concepts;
 pub mod memories;
 pub mod pawn;

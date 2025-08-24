@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::actions::{ScoredAction, GoaiActionEvent};
-use crate::ai::{AIController};
+use crate::actions::ScoredAction;
+use crate::ai::AIController;
+use crate::events::GoaiActionEvent;
 use crate::smart_object::{SmartObjects, ActionSetStore};
 
 
@@ -106,9 +107,10 @@ mod tests {
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use serde_json;
-    use crate::actions::{ActionTemplate, GoaiActionEvent};
+    use crate::actions::ActionTemplate;
     use crate::actionset::ActionSet;
     use crate::arg_values::ContextValue;
+    use crate::events::GoaiActionEvent;
     use crate::utility_concepts::ContextFetcherIdentifier;
     use super::*;
 
