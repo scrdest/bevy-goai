@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use bevy::prelude::*;
 use bevy::reflect::{DynamicList, Reflect};
 use serde::{Serialize, Deserialize};
-use crate::type_registry::TypeRegistryIdentifier;
+use crate::type_registry::IsTypeRegistryIdentifier;
 use crate::pawn::Pawn;
 
 pub trait CurveFunc: Reflect {
@@ -26,7 +26,7 @@ pub trait Consideration: Reflect {
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
-pub struct ContextFetcherIdentifier(String);
+pub struct ContextFetcherIdentifier(pub(crate) String);
 
 impl From<String> for ContextFetcherIdentifier {
     fn from(value: String) -> Self {
@@ -40,7 +40,7 @@ impl Borrow<str> for ContextFetcherIdentifier {
     }
 }
 
-impl TypeRegistryIdentifier for ContextFetcherIdentifier {}
+impl IsTypeRegistryIdentifier for ContextFetcherIdentifier {}
 
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
@@ -59,7 +59,7 @@ impl Borrow<str> for CurveIdentifier {
     }
 }
 
-impl TypeRegistryIdentifier for CurveIdentifier {}
+impl IsTypeRegistryIdentifier for CurveIdentifier {}
 
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
@@ -78,7 +78,7 @@ impl Borrow<str> for ConsiderationIdentifier {
     }
 }
 
-impl TypeRegistryIdentifier for ConsiderationIdentifier {}
+impl IsTypeRegistryIdentifier for ConsiderationIdentifier {}
 
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
