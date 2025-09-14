@@ -1,9 +1,68 @@
+use std::collections::HashMap;
+
+use bevy::ecs::reflect::ReflectCommandExt;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::actions::ScoredAction;
 use crate::ai::AIController;
 use crate::events::GoaiActionEvent;
 use crate::smart_object::{SmartObjects, ActionSetStore};
+
+/* Experimental nonsense, remove me */
+use crate::actions::ActionContext;
+use crate::events::{ActionEventFactory, ActionEvent};
+
+#[derive(Debug, Event)]
+struct TestActionEvent{
+    ctx: ActionContext,
+    state: ActionState,
+}
+
+impl Default for TestActionEvent {
+    fn default() -> Self {
+        Self { ctx: Default::default(), state: ActionState::Running }
+    }
+}
+
+impl ActionEvent for TestActionEvent {
+    fn from_context(context: ActionContext) -> Self {
+        Self {
+            ctx: context,
+            state: ActionState::Running,
+        }
+    }
+}
+
+
+#[derive(Component, Default, Debug, Reflect)]
+#[reflect(Component)]
+struct TestActionEventFactory {
+    queue: Vec<ActionContext>
+}
+
+impl TestActionEventFactory {
+    fn push_context(&mut self, ctx: ActionContext) {
+        self.queue.push(ctx)
+    }
+}
+
+impl ActionEventFactory for TestActionEventFactory {
+    type AsEvent = TestActionEvent;
+
+    fn get_input_contexts(&mut self) -> Vec<ActionContext> {
+        let out = self.queue.to_vec();
+        self.queue = Vec::new();
+        out
+    }
+
+    fn to_action_event(&self, ctx: &ActionContext) -> Self::AsEvent {
+        TestActionEvent { 
+            ctx: ctx.to_owned(), 
+            state: ActionState::Running,
+        }
+    }
+}
+/* END EXPERIMENTAL NONSENSE */
 
 
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
@@ -16,13 +75,12 @@ pub enum ActionState {
 // Action Execution
 
 /// A Component that represents the Action selected for execution by a specific AI entity.
-/// 
-/// The execution is a fairly simple System - we simply run each Action's function and update the state.
 #[derive(Component, Debug)]
 pub struct CurrentAction {
     action: ScoredAction,
     state: ActionState, 
 }
+
 
 /// The heart of the AI system - the system that actually decides what gets done.
 pub(crate) fn decision_loop(
@@ -79,19 +137,21 @@ pub(crate) fn decision_loop(
                 if let Some(scored_action) = best_action {
                     bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
                     let new_current = scored_action.to_owned();
-
-                    let maybe_event = GoaiActionEvent::from_id_and_context(
-                        scored_action.action.event_id, 
-                        Some(scored_action.action.context)
-                    );
-                    let event = maybe_event.expect("Event ID is invalid (out of range)!");
+                    
+                    let mut factory = TestActionEventFactory::default();
+                    factory.push_context(scored_action.action.context);
+                    let refl_factory = factory.to_dynamic();
 
                     commands.command_scope(|mut cmds| {
-                        cmds.trigger(event);
                         cmds.entity(entity).insert(CurrentAction {
                             action: new_current,
                             state: ActionState::Running,
                         });
+
+                        cmds.entity(entity).insert_reflect(refl_factory);
+                        // cmds.entity(entity).insert(
+                        //     factory
+                        // );
                     });
                 }
             }
@@ -104,26 +164,26 @@ pub(crate) fn decision_loop(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::Duration;
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use serde_json;
     use crate::actions::ActionTemplate;
     use crate::actionset::ActionSet;
     use crate::arg_values::ContextValue;
-    use crate::events::GoaiActionEvent;
     use crate::utility_concepts::ContextFetcherIdentifier;
     use super::*;
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
 
     fn test_action(
-        trigger: Trigger<GoaiActionEvent>, 
+        trigger: Trigger<TestActionEvent>, 
     ) {
         let event = trigger.event();
-        let state = event.get_state();
-        let maybe_ctx = event.get_context().as_ref();
+        let state = &event.state;
+        let maybe_ctx = Some(&event.ctx);
 
-        let json_state = serde_json::ser::to_string(state);
+        let json_state = serde_json::ser::to_string(&state);
         let state_name = json_state.unwrap();
         bevy::log::debug!("Current state is {}", state_name);
 
@@ -184,6 +244,27 @@ mod tests {
         ));
     }
 
+    fn raise_action_events<
+        AEF: ActionEventFactory<AsEvent: std::fmt::Debug>
+        + Component<Mutability = bevy::ecs::component::Mutable>
+    > (
+        mut event_factories: Query<&mut AEF>,
+        commands: ParallelCommands,
+    ) {
+        bevy::log::debug!("Running raise_action_events()...");
+        
+        event_factories.par_iter_mut().for_each(|mut factory| {
+            let events = factory.run();
+            bevy::log::debug!("raise_action_events(): Collected events: {:?}", events);
+
+            commands.command_scope(|mut cmds| {
+                events.into_iter().for_each(|evt| {
+                    cmds.trigger(evt)
+                });
+            });
+        });
+    }
+
 
     #[test]
     fn test_run_action() {
@@ -191,7 +272,7 @@ mod tests {
 
         app
         .add_plugins((
-            MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_millis(1000))),
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 
@@ -199,9 +280,13 @@ mod tests {
             }
         ))
         .init_resource::<ActionSetStore>()
+        .register_type::<TestActionEventFactory>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
         .add_systems(Startup, setup_test_entity)
-        .add_systems(Update, decision_loop)
+        .add_systems(FixedUpdate, (
+            decision_loop, 
+            raise_action_events::<TestActionEventFactory>
+        ))
         .add_observer(test_action)
         ;
 
