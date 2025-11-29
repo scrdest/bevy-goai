@@ -68,7 +68,7 @@ pub(crate) struct Action {
     // pub(crate) func: TypeRegistryFuncIdentifier,
     pub(crate) name: String,
     pub(crate) context: ActionContext,
-    pub(crate) event_id: crate::events::GoaiActionEventId,
+    pub(crate) action_key: String,
 }
 
 #[derive(Clone, Reflect, Debug)]
@@ -101,7 +101,7 @@ pub struct ActionTemplate {
     pub(crate) context_fetcher_name: ContextFetcherIdentifier,
     pub(crate) considerations: Vec<ConsiderationData>,
     pub(crate) priority: f32,
-    pub(crate) event: crate::events::GoaiActionEventId,
+    pub(crate) action_key: String,
 }
 
 impl ActionTemplate  {
@@ -206,7 +206,7 @@ impl ActionTemplate  {
                 let action = Action {
                     name, 
                     context,
-                    event_id: self.event.clone(),
+                    action_key: self.action_key.clone(),
                 };
                 Some(ScoredAction {
                     action,

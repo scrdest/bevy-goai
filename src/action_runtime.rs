@@ -5,12 +5,11 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::actions::ScoredAction;
 use crate::ai::AIController;
-use crate::events::GoaiActionEvent;
 use crate::smart_object::{SmartObjects, ActionSetStore};
 
 /* Experimental nonsense, remove me */
 use crate::actions::ActionContext;
-use crate::events::{ActionEventFactory, ActionEvent};
+use crate::events::{ActionEvent};
 
 #[derive(Debug, Event)]
 struct TestActionEvent{
@@ -32,36 +31,6 @@ impl ActionEvent for TestActionEvent {
         }
     }
 }
-
-
-#[derive(Component, Default, Debug, Reflect)]
-#[reflect(Component)]
-struct TestActionEventFactory {
-    queue: Vec<ActionContext>
-}
-
-impl TestActionEventFactory {
-    fn push_context(&mut self, ctx: ActionContext) {
-        self.queue.push(ctx)
-    }
-}
-
-impl ActionEventFactory for TestActionEventFactory {
-    type AsEvent = TestActionEvent;
-
-    fn get_input_contexts(&mut self) -> Vec<ActionContext> {
-        let out = self.queue.to_vec();
-        self.queue = Vec::new();
-        out
-    }
-
-    fn to_action_event(&self, ctx: &ActionContext) -> Self::AsEvent {
-        TestActionEvent { 
-            ctx: ctx.to_owned(), 
-            state: ActionState::Running,
-        }
-    }
-}
 /* END EXPERIMENTAL NONSENSE */
 
 
@@ -79,6 +48,24 @@ pub enum ActionState {
 pub struct CurrentAction {
     action: ScoredAction,
     state: ActionState, 
+}
+
+#[derive(Event, Debug)]
+pub struct ActionPickedEvent {
+    /// Identifier for the handling event (e.g. "GoTo"). 
+    /// This is effectively a link to the *implementation* of the action. 
+    pub action_key: String,
+
+    /// Human-readable primary identifier; one action_key may handle distinct action_names 
+    /// (e.g. action_key "GoTo" may cover action_names "Walk", "Run", "Flee", etc.).
+    /// In other words, this is what this action represents *semantically*, and is less likely
+    /// to change for technical purposes.
+    pub action_name: String,
+
+    pub context: ActionContext,
+
+    /// The AI that requested this Action. 
+    pub source_ai: Entity,
 }
 
 
@@ -137,21 +124,14 @@ pub(crate) fn decision_loop(
                 if let Some(scored_action) = best_action {
                     bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
                     let new_current = scored_action.to_owned();
-                    
-                    let mut factory = TestActionEventFactory::default();
-                    factory.push_context(scored_action.action.context);
-                    let refl_factory = factory.to_dynamic();
 
                     commands.command_scope(|mut cmds| {
-                        cmds.entity(entity).insert(CurrentAction {
-                            action: new_current,
-                            state: ActionState::Running,
+                        cmds.trigger(ActionPickedEvent {
+                            action_name: new_current.action.name,
+                            action_key: new_current.action.action_key,
+                            context: new_current.action.context, 
+                            source_ai: entity,
                         });
-
-                        cmds.entity(entity).insert_reflect(refl_factory);
-                        // cmds.entity(entity).insert(
-                        //     factory
-                        // );
                     });
                 }
             }
@@ -175,6 +155,21 @@ mod tests {
     use super::*;
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
+
+    fn action_picked_handler(
+        trigger: Trigger<ActionPickedEvent>,
+        mut commands: Commands,
+    ) {
+        // User application code - dispatches actual execution Events based on the key in the library Event.
+        let event = trigger.event();
+        let action_name = event.action_key.as_str();
+        match action_name {
+            "TestAction" => {
+                commands.trigger(TestActionEvent::from_context(event.context.to_owned()));
+            },
+            _ => {}
+        }
+    }
 
     fn test_action(
         trigger: Trigger<TestActionEvent>, 
@@ -225,7 +220,7 @@ mod tests {
                 context_fetcher_name: ContextFetcherIdentifier(TEST_CONTEXT_FETCHER_NAME.to_string()),
                 considerations: Vec::from([]),
                 priority: 1.,
-                event: 1,
+                action_key: "TestAction".to_string(),
             }
         ];
 
@@ -244,27 +239,6 @@ mod tests {
         ));
     }
 
-    fn raise_action_events<
-        AEF: ActionEventFactory<AsEvent: std::fmt::Debug>
-        + Component<Mutability = bevy::ecs::component::Mutable>
-    > (
-        mut event_factories: Query<&mut AEF>,
-        commands: ParallelCommands,
-    ) {
-        bevy::log::debug!("Running raise_action_events()...");
-        
-        event_factories.par_iter_mut().for_each(|mut factory| {
-            let events = factory.run();
-            bevy::log::debug!("raise_action_events(): Collected events: {:?}", events);
-
-            commands.command_scope(|mut cmds| {
-                events.into_iter().for_each(|evt| {
-                    cmds.trigger(evt)
-                });
-            });
-        });
-    }
-
 
     #[test]
     fn test_run_action() {
@@ -272,7 +246,7 @@ mod tests {
 
         app
         .add_plugins((
-            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_millis(1000))),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_millis(5000))),
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 
@@ -280,13 +254,12 @@ mod tests {
             }
         ))
         .init_resource::<ActionSetStore>()
-        .register_type::<TestActionEventFactory>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
         .add_systems(Startup, setup_test_entity)
         .add_systems(FixedUpdate, (
             decision_loop, 
-            raise_action_events::<TestActionEventFactory>
         ))
+        .add_observer(action_picked_handler)
         .add_observer(test_action)
         ;
 
