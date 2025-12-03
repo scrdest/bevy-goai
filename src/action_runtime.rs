@@ -50,8 +50,23 @@ pub struct CurrentAction {
     state: ActionState, 
 }
 
+
+/// Supporting Event for triggering a decision_process() for an AI.
+/// Raised whenever an active AI starts a tick without an Action.
+/// Should generally not be raised more than once per Entity per tick.
+#[derive(EntityEvent)]
+pub struct AiDecisionRequested {
+    entity: Entity,
+    smart_objects: Option<SmartObjects>,
+}
+
+/// An Event that signals the decision engine picked the new best Action
+/// and provides details about the chosen Action (abstract ID, context).
+/// Primarily expected to be raised by the decision_process() System 
+/// and listened to by consumers for remapping into more Action-specific logic
+/// (e.g. raising an Event for a *specific* Action implementation).
 #[derive(Event, Debug)]
-pub struct ActionPickedEvent {
+pub struct AiActionPicked {
     /// Identifier for the handling event (e.g. "GoTo"). 
     /// This is effectively a link to the *implementation* of the action. 
     pub action_key: String,
@@ -68,88 +83,8 @@ pub struct ActionPickedEvent {
     pub source_ai: Entity,
 }
 
-
 /// The heart of the AI system - the system that actually decides what gets done.
-pub(crate) fn decision_loop(
-    query: Query<(Entity, &AIController, Option<&SmartObjects>, Option<&CurrentAction>)>,
-    mut commands: ParallelCommands,
-    actionset_store: Res<ActionSetStore>,
-    function_registry: Res<AppFunctionRegistry>,
-) {
-    query.par_iter().for_each(
-        |(entity, ai, maybe_smartobjects, maybe_current_action)|
-    {
-        bevy::log::debug!("Current action for {:?} is {:?}", entity, maybe_current_action);
-
-        if maybe_current_action.is_none() {
-            // 1. Gather ActionSets from Smart Objects
-            
-            // Early termination - we have no real options in this case => idle.
-            // Note that there is no notion of available Actions *NOT* tied to a SO; at
-            // minimum, you'd have a SO with the key representing the Controller itself.
-            if let Some(smartobjects) = maybe_smartobjects {
-                let available_actions = smartobjects.actionset_refs.iter().filter_map(
-                    |actionset_key| {
-                        let maybe_act = actionset_store.map_by_name.get(actionset_key);
-                        maybe_act
-                    }
-                )
-                .flat_map(|acts| {
-                    acts.actions.to_vec()
-                });
-
-                // 2. Score Actions
-                let mut best_score = 0.0;
-                let mut best_action: Option<ScoredAction> = None;
-
-                bevy::log::debug!("Available actions for {:?} are: {:#?}", entity, smartobjects.actionset_refs);
-                
-                for action_spec in available_actions {
-                    bevy::log::debug!("{:?}: Evaluating actionspec {:?}", entity, action_spec.name);
-                    let best_scoring_combo = action_spec.run_considerations(&function_registry.read(), Some(best_score));
-                    if best_scoring_combo.is_none() {
-                        continue
-                    }
-
-                    let best_scoring_combo = best_scoring_combo.unwrap();
-
-                    // if we got here, we know RHS >= LHS, otherwise it would have not been a Some<T>
-                    best_score = best_scoring_combo.score;
-                    best_action = Some(best_scoring_combo);
-
-                
-                let best_action = best_action;
-
-                // 3. Trigger best action execution (raise event)
-                if let Some(scored_action) = best_action {
-                    bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
-                    let new_current = scored_action.to_owned();
-
-                    commands.command_scope(|mut cmds| {
-                        cmds.trigger(ActionPickedEvent {
-                            action_name: new_current.action.name,
-                            action_key: new_current.action.action_key,
-                            context: new_current.action.context, 
-                            source_ai: entity,
-                        });
-                    });
-                }
-            }
-        }
-    }
-})
-}
-
-
-// Supporting Event for triggering a decision_process() for an AI.
-// Raised whenever an active AI starts a tick without an Action.
-#[derive(EntityEvent)]
-pub(crate) struct AiDecisionRequested {
-    entity: Entity,
-    smart_objects: Option<SmartObjects>,
-}
-
-// Event-driven equivalent of the decision_loop
+/// This is the key code that makes this a Utility AI.
 pub(crate) fn decision_process(
     event: On<AiDecisionRequested>,
     mut commands: Commands,
@@ -202,7 +137,7 @@ pub(crate) fn decision_process(
             bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
             let new_current = scored_action.to_owned();
 
-            commands.trigger(ActionPickedEvent {
+            commands.trigger(AiActionPicked {
                 action_name: new_current.action.name,
                 action_key: new_current.action.action_key,
                 context: new_current.action.context, 
@@ -216,7 +151,6 @@ pub(crate) fn decision_process(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::time::Duration;
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use serde_json;
@@ -229,7 +163,7 @@ mod tests {
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
 
     fn action_picked_handler(
-        trigger: On<ActionPickedEvent>,
+        trigger: On<AiActionPicked>,
         mut commands: Commands,
     ) {
         // User application code - dispatches actual execution Events based on the key in the library Event.
@@ -244,7 +178,7 @@ mod tests {
     }
 
     fn test_action(
-        trigger: Trigger<TestActionEvent>, 
+        trigger: On<TestActionEvent>, 
     ) {
         let event = trigger.event();
         let state = &event.state;
