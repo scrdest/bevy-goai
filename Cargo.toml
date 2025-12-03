@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.16.1", features = ["dynamic_linking", "file_watcher", "embedded_watcher", "serialize", "reflect_functions"] }
+bevy = { version = "0.17.3", features = ["dynamic_linking", "file_watcher", "embedded_watcher", "serialize", "reflect_functions"] }
 enum_delegate = "0.2.0"
 libnoise = { version = "1.2.0", features = ["image"] }
 rand = "0.9.2"

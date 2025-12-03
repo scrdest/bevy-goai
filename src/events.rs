@@ -105,6 +105,7 @@ mod tests {
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 
                 filter: "wgpu=error,bevy_render=info,bevy_ecs=info".to_string(),
+                fmt_layer: |_| None,
             }
         ))
         .add_systems(Startup, setup_test_entity)
