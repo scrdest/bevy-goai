@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use bevy::ecs::reflect::ReflectCommandExt;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::actions::ScoredAction;
+use crate::actions::{Action, ScoredAction};
 use crate::ai::AIController;
 use crate::smart_object::{SmartObjects, ActionSetStore};
 
@@ -34,26 +34,11 @@ impl ActionEvent for TestActionEvent {
 /* END EXPERIMENTAL NONSENSE */
 
 
-#[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
-pub enum ActionState {
-    Running,
-    Succeeded,
-    Failed,
-}
-
-// Action Execution
-
-/// A Component that represents the Action selected for execution by a specific AI entity.
-#[derive(Component, Debug)]
-pub struct CurrentAction {
-    action: ScoredAction,
-    state: ActionState, 
-}
-
-
 /// Supporting Event for triggering a decision_process() for an AI.
 /// Raised whenever an active AI starts a tick without an Action.
-/// Should generally not be raised more than once per Entity per tick.
+/// 
+/// Should generally NOT be raised more than once per Entity per tick 
+/// or you are likely running the same calculation multiple times.
 #[derive(EntityEvent)]
 pub struct AiDecisionRequested {
     entity: Entity,
@@ -62,6 +47,7 @@ pub struct AiDecisionRequested {
 
 /// An Event that signals the decision engine picked the new best Action
 /// and provides details about the chosen Action (abstract ID, context).
+/// 
 /// Primarily expected to be raised by the decision_process() System 
 /// and listened to by consumers for remapping into more Action-specific logic
 /// (e.g. raising an Event for a *specific* Action implementation).
@@ -84,7 +70,15 @@ pub struct AiActionPicked {
 }
 
 /// The heart of the AI system - the system that actually decides what gets done.
-/// This is the key code that makes this a Utility AI.
+/// This is the key code that makes this a IAUS Utility AI.
+/// 
+/// The logic here is fundamentally not that complex; we are simply mapping over all 
+/// ActionTemplates from all SmartObjects we have access to, gathering all available Contexts
+/// for those ActionTemplates, scoring all the (ActionTemplate, Context) pairs, and picking the winner.
+/// 
+/// There IS some slight wizardry in how exactly the scoring works, optimization, and other minutia, 
+/// but the core algorithm is a greedy heuristic search with a depth of one; 
+/// basic A* pathfinding is already far more sophisticated than this, but it works, and fast!
 pub(crate) fn decision_process(
     event: On<AiDecisionRequested>,
     mut commands: Commands,
@@ -146,6 +140,131 @@ pub(crate) fn decision_process(
         }
     }
 }
+
+
+#[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
+pub enum ActionState {
+    // Initial states:
+    Queued, // Planned but not started and cannot start yet - waiting on something (likely other Actions).
+    Ready, // Can start now, hadn't done literally anything yet though.
+    
+    // Progressed states: 
+    Running, // Started but didn't finish yet, will continue.
+    Paused, // Started and can continue, but put on hold for now.
+    
+    // Terminal states:
+    Succeeded,  // Did all it was supposed to and is no longer needed :D
+    Failed,  // We gave up due to getting stuck/timeout/etc. :c
+    Cancelled,  // We gave up because a player decided we should :I
+}
+
+impl ActionState {
+    /// A shorthand for checking if an Action is in one of the Initial states (e.g. Ready).
+    fn is_initial(&self) -> bool {
+        match self {
+            Self::Queued => true,
+            Self::Ready => true,
+            _ => false,
+        }
+    }
+
+    /// A shorthand for checking if an Action is in one of the Progressed states (e.g. Running).
+    fn is_progressed(&self) -> bool {
+        match self {
+            Self::Running => true,
+            Self::Paused => true,
+            _ => false,
+        }
+    }
+
+    /// A shorthand for checking if an Action is in one of the Terminal states (e.g. Succeeded).
+    fn is_terminal(&self) -> bool {
+        match self {
+            Self::Succeeded => true,
+            Self::Failed => true,
+            Self::Cancelled => true,
+            _ => false,
+        }
+    }
+
+    /// A shorthand for checking if an Action should be processed/'ticked'. If false, we can skip it.
+    fn should_process(&self) -> bool {
+        match self {
+            Self::Ready => true,
+            Self::Running => true,
+            _ => false,
+        }
+    }
+}
+
+
+// Action Execution
+/// A Component that makes this Entity track an AI Action, i.e. store and expose 
+/// data about some Action's execution (e.g. 'Is this still running?' or 'How long ago did it start?') 
+/// across (potentially) multiple frames and/or serde operations.
+/// 
+/// This is the 'master'/'root' marker for tracking Actions - all code within this library will assume 
+/// anything without this Component does not track anything, and anything that has any of the extension
+/// Component also has this Component.
+#[derive(Component, Debug)]
+pub struct ActionTracker(ScoredAction);
+
+
+/// An 'extension' Component for ActionTracker Bundles.
+/// 
+/// Adds Action state tracking to the ActionTracker.
+/// In this context, state is roughly the 'lifecycle' of an Action: 
+/// Pending -> Running -> Terminal (Successful/Failed/Cancelled/etc.).
+/// 
+/// This is a very handy piece of information. 
+/// You can query it for your Actions to do setup work for Pending or 
+/// skip processing for Terminal states, in your UI code to visualize
+/// the state of the current behavior or provide a 'Cancel Action' button...
+/// You might also (correctly) guess it powers some of the Action lifecycle Events.
+#[derive(Component, Debug)]
+pub struct ActionTrackerState(ActionState);
+
+/// Helper; wraps how we store time for tracking Action runtime timining.
+#[derive(Debug)]
+pub enum TimeInstantActionTracker {
+    Virtual(std::time::Duration),
+    Real(std::time::Duration),
+    VirtualAndReal((std::time::Duration, std::time::Duration))
+}
+
+/// An 'extension' Component for ActionTracker Bundles.
+/// 
+/// Adds Action time metadata tracking to the ActionTracker, 
+/// such as the start and end times.
+/// 
+/// The primary purpose of this is timeouts to kill tasks that got stuck 
+/// or did not get cleaned up properly for some reason and the like, but will 
+/// almost certainly be handy for UIs and/or Action logic itself as well.
+#[derive(Component, Debug, Default)]
+pub struct ActionTrackerTimer {
+    start_time: Option<TimeInstantActionTracker>,
+    last_tick_time: Option<TimeInstantActionTracker>,
+    end_time: Option<TimeInstantActionTracker>,
+}
+
+
+/// An 'extension' Component for ActionTracker Bundles.
+/// 
+/// Indicates that this tracker should be processed by a System that   
+/// runs some sort of 'tick' logic for the associated Action. 
+/// 
+/// For example, a MoveTo<pos> Action might move a unit by one grid square, 
+/// or one turn's worth of moves, or whatever.
+/// 
+/// This may be implemented as a function call, a signal emit, both, or whatever else;
+/// it's entirely your call as a library user to write your Systems how you want 'em.
+/// 
+/// This Component is entirely optional - if you don't use it, you can just 
+/// catch Events for Action start/end and handle the execution asynchronously 
+/// in your game code's 'native' systems (e.g. just set a destination for your 
+/// Movement system in an Observer and let it figure out the specifics itself).
+#[derive(Component)]
+pub struct ActionTrackerTicks;
 
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::reflect::{FromType, Reflect};
 use crate::actions::ActionContext;
-use crate::action_runtime::ActionPickedEvent;
+use crate::action_runtime::AiActionPicked;
 
 
 pub trait ActionEvent: Event {
@@ -66,7 +66,7 @@ mod tests {
         ctx2.insert("foo".into(), 1.into());
         ctx2.insert("bar".into(), 2.into());
 
-        commands.trigger(ActionPickedEvent {
+        commands.trigger(AiActionPicked {
             action_name: "TestAction".into(),
             action_key: "TestActionEvent".into(),
             context: ctx2,
@@ -75,7 +75,7 @@ mod tests {
     }
 
     fn dispatch_events(
-        trigger: Trigger<ActionPickedEvent>,
+        trigger: On<AiActionPicked>,
         mut commands: Commands,
     ) {
         let evt = trigger.event();
@@ -88,7 +88,7 @@ mod tests {
     }
 
     fn handle_event(
-        trigger: Trigger<TestActionEvent>
+        trigger: On<TestActionEvent>
     ) {
         let evt = trigger.event();
         bevy::log::debug!("Processing event {:?}", evt);
