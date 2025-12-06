@@ -38,6 +38,9 @@ impl Borrow<str> for &DynFuncName {
 impl IsTypeRegistryIdentifier for DynFuncName {}
 
 
+pub type ActionScore = f32;
+
+
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub struct ConsiderationData {
     #[serde(rename="consideration")]
@@ -46,15 +49,15 @@ pub struct ConsiderationData {
     #[serde(rename="curve")]
     curve_name: CurveIdentifier,
 
-    min: f32,
-    max: f32,
+    min: ActionScore,
+    max: ActionScore,
 }
 
 struct RunnableConsideration<'a, 'b: 'a> {
     func: DynamicFunction<'a>,
     curve: DynamicFunction<'b>,
-    min: f32,
-    max: f32,
+    min: ActionScore,
+    max: ActionScore,
 }
 
 pub type ActionContext = HashMap<String, ContextValue>;
@@ -75,7 +78,7 @@ pub(crate) struct Action {
 pub(crate) struct ScoredAction {
     /// 
     pub(crate) action: Action,
-    pub(crate) score: f32,
+    pub(crate) score: ActionScore,
 }
 
 
@@ -100,7 +103,7 @@ pub struct ActionTemplate {
     #[serde(rename="context_fetcher")]
     pub(crate) context_fetcher_name: ContextFetcherIdentifier,
     pub(crate) considerations: Vec<ConsiderationData>,
-    pub(crate) priority: f32,
+    pub(crate) priority: ActionScore,
     pub(crate) action_key: String,
 }
 

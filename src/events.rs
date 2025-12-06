@@ -5,7 +5,7 @@ use crate::action_runtime::AiActionPicked;
 
 
 pub trait ActionEvent: Event {
-    fn from_context(context: ActionContext) -> Self;
+    fn from_context(context: ActionContext, action_tracker: Entity) -> Self;
 }
 
 
@@ -48,7 +48,7 @@ mod tests {
     struct TestActionEvent(ActionContext);
 
     impl ActionEvent for TestActionEvent {
-        fn from_context(context: ActionContext) -> Self {
+        fn from_context(context: ActionContext, action_tracker: Entity) -> Self {
             Self(context)
         }
     }
@@ -69,8 +69,9 @@ mod tests {
         commands.trigger(AiActionPicked {
             action_name: "TestAction".into(),
             action_key: "TestActionEvent".into(),
-            context: ctx2,
-            source_ai: entity,
+            action_context: ctx2,
+            action_score: 1.,
+            entity: entity,
         });
     }
 
@@ -82,7 +83,7 @@ mod tests {
         let actionkey = evt.action_key.as_str();
 
         match actionkey {
-            "TestActionEvent" => { commands.trigger(TestActionEvent(evt.context.to_owned())) }
+            "TestActionEvent" => { commands.trigger(TestActionEvent(evt.action_context.to_owned())) }
             _ => { panic!("Unrecognized Action Key: {}", actionkey) }
         };
     }

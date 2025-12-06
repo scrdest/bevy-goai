@@ -11,21 +11,28 @@ use crate::smart_object::{SmartObjects, ActionSetStore};
 use crate::actions::ActionContext;
 use crate::events::{ActionEvent};
 
-#[derive(Debug, Event)]
+#[derive(Debug, EntityEvent)]
 struct TestActionEvent{
+    /// NOTE: entity is expected to be an ActionTracker here.
+    entity: Entity, 
     ctx: ActionContext,
     state: ActionState,
 }
 
-impl Default for TestActionEvent {
-    fn default() -> Self {
-        Self { ctx: Default::default(), state: ActionState::Running }
+impl TestActionEvent {
+    fn with_default_context(action_tracker: Entity) -> Self {
+        Self { 
+            entity: action_tracker,
+            ctx: Default::default(), 
+            state: ActionState::Running 
+        }
     }
 }
 
 impl ActionEvent for TestActionEvent {
-    fn from_context(context: ActionContext) -> Self {
+    fn from_context(context: ActionContext, action_tracker: Entity) -> Self {
         Self {
+            entity: action_tracker,
             ctx: context,
             state: ActionState::Running,
         }
@@ -45,17 +52,24 @@ pub struct AiDecisionRequested {
     smart_objects: Option<SmartObjects>,
 }
 
+/// Type alias to make it easier to switch out what is used for keys later.
+type AbstractActionKey = String;
+
 /// An Event that signals the decision engine picked the new best Action
-/// and provides details about the chosen Action (abstract ID, context).
+/// for a specific AI Entity and provides details about it (abstract ID, 
+/// context, etc.).
 /// 
 /// Primarily expected to be raised by the decision_process() System 
 /// and listened to by consumers for remapping into more Action-specific logic
 /// (e.g. raising an Event for a *specific* Action implementation).
-#[derive(Event, Debug)]
+#[derive(EntityEvent, Debug)]
 pub struct AiActionPicked {
+    /// The AI that requested this Action. 
+    pub entity: Entity,
+
     /// Identifier for the handling event (e.g. "GoTo"). 
     /// This is effectively a link to the *implementation* of the action. 
-    pub action_key: String,
+    pub action_key: AbstractActionKey,
 
     /// Human-readable primary identifier; one action_key may handle distinct action_names 
     /// (e.g. action_key "GoTo" may cover action_names "Walk", "Run", "Flee", etc.).
@@ -63,10 +77,38 @@ pub struct AiActionPicked {
     /// to change for technical purposes.
     pub action_name: String,
 
-    pub context: ActionContext,
+    /// The Context of the Action, i.e. the static input(s) we scored against.
+    pub action_context: ActionContext,
 
-    /// The AI that requested this Action. 
-    pub source_ai: Entity,
+    /// The Utility score; this is so that we can decide whether to possibly 
+    /// override this with a higher-priority Action later on.
+    pub action_score: crate::actions::ActionScore,
+}
+
+impl AiActionPicked {
+    fn new(
+        ai_owner: Entity,
+        action_key: AbstractActionKey,
+        action_name: String,
+        action_context: ActionContext,
+        action_score: crate::actions::ActionScore,
+    ) -> Self {
+        
+        bevy::log::debug!(
+            "Creating a new AiActionPicked event for {:?} with key {:?} ({:?})",
+            ai_owner,
+            action_key,
+            action_name
+        );
+
+        Self {
+            entity: ai_owner,
+            action_key: action_key,
+            action_name: action_name,
+            action_context: action_context,
+            action_score: action_score,
+        }
+    }
 }
 
 /// The heart of the AI system - the system that actually decides what gets done.
@@ -131,31 +173,59 @@ pub(crate) fn decision_process(
             bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
             let new_current = scored_action.to_owned();
 
-            commands.trigger(AiActionPicked {
-                action_name: new_current.action.name,
-                action_key: new_current.action.action_key,
-                context: new_current.action.context, 
-                source_ai: entity,
-            });
+            commands.trigger(AiActionPicked::new(
+                entity,
+                new_current.action.action_key,
+                new_current.action.name,
+                new_current.action.context, 
+                best_score,
+            ));
         }
     }
 }
 
 
+/// A lifecycle marker for ActionTrackers to indicate what the status of the tracked Action is. 
+/// 
+/// This is a state machine, more or less, with three layers:
+/// 1) Initial
+/// 2) Progressed
+/// 3) Terminal
+/// 
+/// *As a general rule*, the progression through those layers should be monotonically non-decreasing, i.e.:
+/// - Terminal States should never change at all once reached, 
+/// - Progressed states should only become Terminal or different Progressed States, and
+/// - Initial states can become any other State.
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
 pub enum ActionState {
-    // Initial states:
-    Queued, // Planned but not started and cannot start yet - waiting on something (likely other Actions).
-    Ready, // Can start now, hadn't done literally anything yet though.
+    // Note that we are NOT implementing Default for this on purpose; 
+    // the default state is domain-specific (though probably just Ready most of the time).
+
+    /// Initial state. Planned but not started and cannot start yet - waiting on something (likely other Actions).
+    Queued, 
+    /// Initial state. Can start now, hadn't done literally anything yet though.
+    Ready, 
     
-    // Progressed states: 
-    Running, // Started but didn't finish yet, will continue.
-    Paused, // Started and can continue, but put on hold for now.
+    /// Progressed state. Started but didn't finish yet, will continue.
+    Running, 
+    /// Progressed state. Started and can continue, but has been put on hold for now.
+    Paused, 
     
-    // Terminal states:
-    Succeeded,  // Did all it was supposed to and is no longer needed :D
-    Failed,  // We gave up due to getting stuck/timeout/etc. :c
-    Cancelled,  // We gave up because a player decided we should :I
+    /// Terminal state. Did all it was supposed to and is no longer needed, yaaay.
+    Succeeded, 
+    
+    /// Terminal state. 
+    /// We gave up due to getting stuck/timeout/etc., naaay. 
+    /// Generally implies the action should not be retried as-is 
+    /// and may trigger failure callbacks.
+    Failed, 
+    
+    /// Terminal state. 
+    /// We gave up because of an 'external' decision that we should, 
+    /// and NOT because something was wrong with the execution. 
+    /// The Action may well be still valid, we just stopped pursuing it. 
+    /// You can think of it as 'Paused, but forever'. 
+    Cancelled, 
 }
 
 impl ActionState {
@@ -224,27 +294,87 @@ pub struct ActionTracker(ScoredAction);
 #[derive(Component, Debug)]
 pub struct ActionTrackerState(ActionState);
 
+impl ActionTrackerState {
+    fn ready() -> Self {
+        Self(ActionState::Ready)
+    }
+
+    fn queued() -> Self {
+        Self(ActionState::Queued)
+    }
+}
+
 /// Helper; wraps how we store time for tracking Action runtime timining.
 #[derive(Debug)]
 pub enum TimeInstantActionTracker {
     Virtual(std::time::Duration),
     Real(std::time::Duration),
-    VirtualAndReal((std::time::Duration, std::time::Duration))
+    VirtualAndReal((std::time::Duration, std::time::Duration)),
 }
 
 /// An 'extension' Component for ActionTracker Bundles.
+/// Adds Action time metadata tracking to the ActionTracker for creation time.
 /// 
-/// Adds Action time metadata tracking to the ActionTracker, 
-/// such as the start and end times.
+/// This is separate and different from the START time. 
+/// An Action 'Start' is when the execution begins, 'Created' is when the task gets planned.
 /// 
-/// The primary purpose of this is timeouts to kill tasks that got stuck 
-/// or did not get cleaned up properly for some reason and the like, but will 
-/// almost certainly be handy for UIs and/or Action logic itself as well.
+/// The primary use-case for this is timeouts and cleanup, especially when combined with other 
+/// ActionTracker timers - e.g. if an Action was queued up a year ago and it still hasn't finished, 
+/// it is most likely a zombie job that should be terminated. 
+/// 
+/// However, as with all of these, use it as you wish, it's a building block.
+#[derive(Component, Debug)]
+pub struct ActionTrackerCreationTimer {
+    creation_time: TimeInstantActionTracker,
+}
+
+/// An 'extension' Component for ActionTracker Bundles. 
+/// Adds Action time metadata tracking to the ActionTracker 
+/// for Start and End times of the Action's *execution*.
+/// 
+/// Note that both of these are Option<T>! 
+/// 
+/// Most obviously, an End time of None means the Action is still pending or running. 
+/// You can tell which one it is by the Start time - None means it's pending, i.e. did not start yet.
+/// 
+/// The primary purpose of this component is for timeouts to kill tasks that
+/// got stuck in limbo or did not get cleaned up properly for some reason and the like, 
+/// but will almost certainly be handy for UIs and/or Action logic itself as well.
+/// 
+/// However, as with all of these, use it as you wish, it's a building block.
 #[derive(Component, Debug, Default)]
-pub struct ActionTrackerTimer {
+pub struct ActionTrackerRuntimeTimer {
     start_time: Option<TimeInstantActionTracker>,
-    last_tick_time: Option<TimeInstantActionTracker>,
     end_time: Option<TimeInstantActionTracker>,
+}
+
+/// An 'extension' Component for ActionTracker Bundles. 
+/// Adds Action time metadata tracking to the ActionTracker 
+/// for tracking when the ActionTracker was last 'ticked' 
+/// (processed by a system that implements Actually Doing the Action).
+/// 
+/// The timer value is Optioned; None indicates the ActionTracker has never been ticked.
+/// 
+/// This Component makes most sense paired with the ActionTrackerTicks Component 
+/// which indicates that this ActionTracker CAN ever be ticked at all.
+/// 
+/// This is not a hard dependency though. In some cases, it might be useful to add and remove 
+/// the 'ticking' to an Action dynamically (e.g. as a LOD optimization), so this link is NOT 
+/// enforced by the library on purpose.
+/// 
+/// You are also free to (ab)use this timer by manually updating it in your Observers whenever 
+/// you do anything with the tracked Action in a more event-driven Action implementation as well.
+/// 
+/// The first purpose of this timer is to detect Action garbage - trackers that 
+/// had been created, but are not doing any meaningful work to progress to completion.
+/// 
+/// The second purpose of this timer is to provide a nice way to get time deltas for 
+/// 'sparsely' ticked Actions, e.g. event-driven or when reloaded from a savefile.
+/// 
+/// However, as with all of these, use it as you wish, it's a building block.
+#[derive(Component, Debug, Default)]
+pub struct ActionTrackerTickTimer {
+    last_tick_time: Option<TimeInstantActionTracker>,
 }
 
 
@@ -267,6 +397,298 @@ pub struct ActionTrackerTimer {
 pub struct ActionTrackerTicks;
 
 
+#[derive(Debug, Clone)]
+struct ActionTrackerSpawnConfig {
+    use_ticker: bool,
+    use_create_timer: bool,
+    use_runtime_timer: bool,
+    use_tick_timer: bool,
+}
+
+impl ActionTrackerSpawnConfig {
+    fn builder() -> ActionTrackerSpawnConfigBuilder {
+        ActionTrackerSpawnConfigBuilder::default()
+    }
+}
+
+/// Builder pattern for ActionTrackerSpawnConfig
+#[derive(Default, Debug, Clone)]
+pub struct ActionTrackerSpawnConfigBuilder {
+    use_ticker: Option<bool>,
+    use_timers: Option<bool>,
+    use_create_timer: Option<bool>,
+    use_runtime_timer: Option<bool>,
+    use_tick_timer: Option<bool>,
+}
+
+impl ActionTrackerSpawnConfigBuilder {
+    fn build(self) -> ActionTrackerSpawnConfig {
+        let use_ticker = self.use_ticker.unwrap_or(false);
+        let use_timers = self.use_timers.unwrap_or(false);
+        let use_create_timer = self.use_create_timer.unwrap_or(use_timers);
+        let use_runtime_timer = self.use_runtime_timer.unwrap_or(use_timers);
+        let use_tick_timer = self.use_tick_timer.unwrap_or(use_ticker && use_timers);
+
+        ActionTrackerSpawnConfig {
+            use_ticker,
+            use_create_timer,
+            use_runtime_timer,
+            use_tick_timer,
+        }
+    }
+
+    fn new() -> Self {
+        self::default()
+    }
+
+    fn set_use_ticker(mut self, val: bool) -> Self {
+        self.use_ticker = Some(val); self
+    }
+
+    fn set_use_timers(mut self, val: bool) -> Self {
+        self.use_timers = Some(val); self
+    }
+
+    fn set_use_create_timer(mut self, val: bool) -> Self {
+        self.use_create_timer = Some(val); self
+    }
+
+    fn set_use_runtime_timer(mut self, val: bool) -> Self {
+        self.use_runtime_timer = Some(val); self
+    }
+
+    fn set_use_tick_timer(mut self, val: bool) -> Self {
+        self.use_tick_timer = Some(val); self
+    }
+
+    /// Creates a new builder using an existing config as a starting point.
+    /// This means the values are preconfigured to match the existing config, 
+    /// but you can modify them freely before turning this into a new config.
+    fn from_reference_config(config: ActionTrackerSpawnConfig) -> Self {
+        Self {
+            use_ticker: Some(config.use_ticker),
+            use_create_timer: Some(config.use_create_timer),
+            use_runtime_timer: Some(config.use_runtime_timer),
+            use_tick_timer: Some(config.use_tick_timer),
+            ..Default::default()
+        }
+    }
+}
+
+
+impl Into<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
+    fn into(self) -> ActionTrackerSpawnConfig {
+        self.build()
+    }
+}
+
+impl From<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
+    fn from(value: ActionTrackerSpawnConfig) -> Self {
+        Self::from_reference_config(value)
+    }
+}
+
+/// An Event representing some system asking the library to track an Action.
+/// You could DIY it, but using this Event should cover typical usecases for ya.
+#[derive(EntityEvent)]
+pub struct ActionTrackerSpawnRequested {
+    entity: Entity, 
+    action: ScoredAction, 
+    tracker_config: Option<ActionTrackerSpawnConfig>,
+}
+
+impl ActionTrackerSpawnRequested {
+    /// Create a new ActionTracker spawn request.
+    fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
+        bevy::log::debug!("Creating a new ActionTrackerSpawnRequested event for {:?}", action);
+
+        Self {
+            entity: entity, 
+            action: action,
+            tracker_config: config,
+        }
+    }
+
+    /// Create a new ActionTracker spawn request, with whatever defaults the library picked for you. 
+    fn with_library_defaults(entity: Entity, action: ScoredAction) -> Self {
+        Self::new(entity, action, None)
+    }
+
+    /// Create a new ActionTracker spawn request with a specified config.
+    fn with_config(entity: Entity, action: ScoredAction, config: ActionTrackerSpawnConfig) -> Self {
+        Self::new(entity, action, Some(config))
+    }
+
+    /// Create a new ActionTracker spawn request, allowing the config to be built 
+    /// by evaluating a specified callback on the ActionTrackerSpawnConfigBuilder.
+    /// 
+    /// Kind of like the `Option::or_else()` API and the like, lazy evaluation.
+    /// 
+    /// Mainly a syntax sugar API so you don't have to create a Builder yourself.
+    fn with_config_builder(
+        entity: Entity, 
+        action: ScoredAction, 
+        builder: &mut dyn FnMut(ActionTrackerSpawnConfigBuilder) -> Option<ActionTrackerSpawnConfig>,
+    ) -> Self {
+        Self::new(
+            entity, 
+            action, 
+            builder(ActionTrackerSpawnConfig::builder())
+        )
+    }
+}
+
+/// An Event notifying Observers that a new ActionTracker has been created.
+#[derive(EntityEvent)]
+pub struct ActionTrackerSpawned {
+    entity: Entity
+}
+
+/// Event handler for spawning ActionTrackers for Actions, 
+/// triggered by an ActionTrackerSpawnRequested Event.
+fn actiontracker_spawn_requested(
+    event: On<ActionTrackerSpawnRequested>,
+    mut commands: Commands,
+    game_timer: Res<Time>,
+    real_timer: Res<Time<Real>>,
+) {
+
+    let mut tracker = commands.spawn((
+        ActionTracker(event.action.clone()),
+        ActionTrackerState::ready(),
+    ));
+
+    let spawn_config = match &event.tracker_config {
+        Some(config) => config,
+        None => &ActionTrackerSpawnConfig::builder().build()
+    };
+
+    if spawn_config.use_ticker {
+        // Add ticking to this ActionTracker.
+        // The Component for this is just a marker, pretty trivial.
+        tracker.insert(ActionTrackerTicks);
+    }
+
+    // Add timing components.
+    // 
+    // For now we'll use unwrapped elapsed Durations for this as a standard.
+    // Real time in particular may span DAYS for reloads, so wrapping it may cause serious artifacts.
+    // Duration is u64-based; you may get issues if you leave your game running for 585 billion years.
+    if spawn_config.use_create_timer {
+        let virtual_spawn_time = game_timer.elapsed();
+        let real_spawn_time = real_timer.elapsed();
+
+        tracker.insert(ActionTrackerCreationTimer {
+            creation_time: TimeInstantActionTracker::VirtualAndReal((virtual_spawn_time, real_spawn_time))
+        });
+    }
+
+    if spawn_config.use_runtime_timer {
+        // The Action hasn't started yet, so they will both be None for now.
+        tracker.insert(ActionTrackerRuntimeTimer::default());
+    }
+
+    if spawn_config.use_tick_timer {
+        // The Action hasn't been ticked, so starts as None.
+        tracker.insert(ActionTrackerTickTimer::default());
+    }
+
+    // Send a friendly PSA that we have created this Entity for downstream users to hook into.
+    tracker.trigger(|atracker| ActionTrackerSpawned { entity: atracker });
+}
+
+
+/// An Event representing some system asking the library to stop tracking an Action.
+/// This will usually happen when the Action has reached some terminal state.
+/// You could DIY it, but using this Event should cover typical usecases for ya.
+#[derive(EntityEvent)]
+pub struct ActionTrackerDespawnRequested {
+    entity: Entity, 
+}
+
+/// A frankly pretty trivial callback that deletes ActionTrackers that were requested to be cleaned up.
+/// As each Tracker is its own unique Entity, this will clean up the whole bundle (including optional modules).
+/// 
+/// If you want to invoke callbacks on success/failure/etc., this should happen BEFORE this event is raised.
+fn actiontracker_despawn_requested(
+    event: On<ActionTrackerDespawnRequested>,
+    mut commands: Commands,
+) {
+    let _ = commands.get_entity(event.entity).and_then(|mut e| Ok(e.despawn()));
+}
+
+pub fn actiontracker_done_cleanup_system(
+    query: Query<(Entity, &ActionTracker, &ActionTrackerState)>, 
+    mut commands: Commands, 
+) {
+    bevy::log::debug!("Processing ActionTracker cleanup...");
+
+    for (entity, tracker, state) in query.iter() {
+        let is_done = match state.0 {
+            ActionState::Succeeded => true,
+            ActionState::Failed => true,
+            ActionState::Cancelled => true,
+            _ => false,
+        };
+        
+        bevy::log::debug!("ActionTrackerCleanup: Action {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
+
+        if is_done {
+            bevy::log::debug!("ActionTrackerCleanup: Action {:?} finished, cleaning up the Tracker", tracker.0.action);
+            commands.trigger(ActionTrackerDespawnRequested {
+                entity: entity
+            });
+        }
+    }
+}
+
+
+/// A resource that allows you to specify the global defaults for all ActionTrackers.
+/// 
+/// If you have a 'house style' for your AI Action implementation, this can save you 
+/// a lot of boilerplate.
+/// 
+/// Note that you can still always override this config for individual exceptional cases.
+#[derive(Default, Resource)]
+pub struct UserDefaultActionTrackerSpawnConfig {
+    config: Option<ActionTrackerSpawnConfig>
+}
+
+/// A batteries-included solution for creating ActionTrackers for your Actions.
+/// 
+/// Event-driven; responds to AiActionPicked events
+pub(crate) fn create_tracker_for_picked_action(
+    trigger: On<AiActionPicked>,
+    mut commands: Commands,
+    user_default_config_resource: Res<UserDefaultActionTrackerSpawnConfig>,
+) {
+    let event = trigger.event();
+
+    let action = Action {
+        name: event.action_name.clone(),
+        action_key: event.action_key.clone(),
+        context: event.action_context.clone(),
+    };
+
+    let scored_action = ScoredAction {
+        action: action,
+        score: event.action_score,
+    };
+
+    let user_config = user_default_config_resource.config.clone();
+
+    commands.trigger(
+        ActionTrackerSpawnRequested::new(
+            event.entity,
+            scored_action, 
+            user_config,
+        )
+    );
+}
+
+
+
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -281,25 +703,59 @@ mod tests {
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
 
-    fn action_picked_handler(
-        trigger: On<AiActionPicked>,
+    fn action_tracker_handler(
+        mut query: Query<(
+            Entity, 
+            &ActionTracker, 
+            &mut ActionTrackerState, 
+            Option<&mut ActionTrackerTickTimer>
+        ), With<ActionTrackerTicks>>,
+        game_timer: Res<Time>,
+        real_timer: Res<Time<Real>>,
         mut commands: Commands,
     ) {
         // User application code - dispatches actual execution Events based on the key in the library Event.
-        let event = trigger.event();
-        let action_name = event.action_key.as_str();
-        match action_name {
-            "TestAction" => {
-                commands.trigger(TestActionEvent::from_context(event.context.to_owned()));
-            },
-            _ => {}
+        for (tracker_ent, tracker, state, tick_timer) in query.iter_mut() {
+            if !state.0.should_process() {
+                bevy::log::debug!("Skipping processing for Action(Tracker) {:?} - {:?}", tracker.0.action.name, state.0);
+                continue;
+            }
+
+            if let Some(mut tick_timer_included) = tick_timer {
+                let current_time_game = game_timer.elapsed();
+                let current_time_real = real_timer.elapsed();
+
+                let new_value = TimeInstantActionTracker::VirtualAndReal((
+                    current_time_game, current_time_real
+                ));
+
+                tick_timer_included.last_tick_time = Some(new_value);
+            }
+            
+            let action_key = &tracker.0.action.action_key;
+
+            match action_key.as_str() {
+                "TestAction" => {
+                    bevy::log::debug!("Triggering a TestActionEvent...");
+                    commands.trigger(TestActionEvent::from_context(
+                        tracker.0.action.context.clone(),
+                        tracker_ent,
+                    ));
+                },
+                _ => {}
+            }
         }
     }
 
     fn test_action(
         trigger: On<TestActionEvent>, 
+        mut commands: Commands,
     ) {
         let event = trigger.event();
+        let tracker = event.entity;
+
+        let tracker_cmds = commands.get_entity(tracker);
+
         let state = &event.state;
         let maybe_ctx = Some(&event.ctx);
 
@@ -324,6 +780,14 @@ mod tests {
         }.unwrap();
 
         bevy::log::debug!("New state is {:?}", new);
+
+        match tracker_cmds {
+            Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
+            Ok(mut cmds) => { 
+                bevy::log::debug!("Updating the ActionTracker {:?} state to new value {:?}", tracker, new);
+                cmds.insert(ActionTrackerState(new)); 
+            },
+        }
     }
 
     fn test_context_fetcher() -> Vec<crate::actions::ActionContext> {
@@ -373,6 +837,16 @@ mod tests {
         });
     }
 
+    fn setup_default_action_tracker_config(
+        mut config_res: ResMut<UserDefaultActionTrackerSpawnConfig>
+    ) {
+        let new_config = 
+            ActionTrackerSpawnConfigBuilder::new()
+            .set_use_ticker(true)
+            .set_use_timers(false)
+        ;
+        config_res.config = Some(new_config.build());
+    }
 
     #[test]
     fn test_run_action() {
@@ -380,7 +854,7 @@ mod tests {
 
         app
         .add_plugins((
-            // MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_millis(200))),
+            // MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(std::time::Duration::from_millis(200))),
             MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
@@ -389,12 +863,18 @@ mod tests {
                 fmt_layer: |_| None,
             }
         ))
+        .init_resource::<UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<ActionSetStore>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
-        .add_observer(decision_process)
         .add_systems(Startup, setup_test_entity)
-        .add_observer(action_picked_handler)
+        .add_systems(Startup, setup_default_action_tracker_config)
+        .add_observer(create_tracker_for_picked_action)
+        .add_observer(actiontracker_spawn_requested)
+        .add_observer(actiontracker_despawn_requested)
+        .add_observer(decision_process)
         .add_observer(test_action)
+        .add_systems(Update, action_tracker_handler)
+        .add_systems(PostUpdate, actiontracker_done_cleanup_system)
         ;
 
         app.run();
