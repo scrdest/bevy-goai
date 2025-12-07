@@ -1,15 +1,10 @@
-use std::collections::HashMap;
-
-use bevy::ecs::reflect::ReflectCommandExt;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::actions::{Action, ScoredAction};
-use crate::ai::AIController;
-use crate::smart_object::{SmartObjects, ActionSetStore};
 
 /* Experimental nonsense, remove me */
 use crate::actions::ActionContext;
-use crate::events::{ActionEvent};
+use crate::events::ActionEvent;
 
 #[derive(Debug, EntityEvent)]
 struct TestActionEvent{
@@ -30,159 +25,15 @@ impl TestActionEvent {
 }
 
 impl ActionEvent for TestActionEvent {
-    fn from_context(context: ActionContext, action_tracker: Entity) -> Self {
+    fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
         Self {
             entity: action_tracker,
             ctx: context,
-            state: ActionState::Running,
+            state: state.unwrap_or(ActionState::Ready),
         }
     }
 }
 /* END EXPERIMENTAL NONSENSE */
-
-
-/// Supporting Event for triggering a decision_process() for an AI.
-/// Raised whenever an active AI starts a tick without an Action.
-/// 
-/// Should generally NOT be raised more than once per Entity per tick 
-/// or you are likely running the same calculation multiple times.
-#[derive(EntityEvent)]
-pub struct AiDecisionRequested {
-    entity: Entity,
-    smart_objects: Option<SmartObjects>,
-}
-
-/// Type alias to make it easier to switch out what is used for keys later.
-type AbstractActionKey = String;
-
-/// An Event that signals the decision engine picked the new best Action
-/// for a specific AI Entity and provides details about it (abstract ID, 
-/// context, etc.).
-/// 
-/// Primarily expected to be raised by the decision_process() System 
-/// and listened to by consumers for remapping into more Action-specific logic
-/// (e.g. raising an Event for a *specific* Action implementation).
-#[derive(EntityEvent, Debug)]
-pub struct AiActionPicked {
-    /// The AI that requested this Action. 
-    pub entity: Entity,
-
-    /// Identifier for the handling event (e.g. "GoTo"). 
-    /// This is effectively a link to the *implementation* of the action. 
-    pub action_key: AbstractActionKey,
-
-    /// Human-readable primary identifier; one action_key may handle distinct action_names 
-    /// (e.g. action_key "GoTo" may cover action_names "Walk", "Run", "Flee", etc.).
-    /// In other words, this is what this action represents *semantically*, and is less likely
-    /// to change for technical purposes.
-    pub action_name: String,
-
-    /// The Context of the Action, i.e. the static input(s) we scored against.
-    pub action_context: ActionContext,
-
-    /// The Utility score; this is so that we can decide whether to possibly 
-    /// override this with a higher-priority Action later on.
-    pub action_score: crate::actions::ActionScore,
-}
-
-impl AiActionPicked {
-    fn new(
-        ai_owner: Entity,
-        action_key: AbstractActionKey,
-        action_name: String,
-        action_context: ActionContext,
-        action_score: crate::actions::ActionScore,
-    ) -> Self {
-        
-        bevy::log::debug!(
-            "Creating a new AiActionPicked event for {:?} with key {:?} ({:?})",
-            ai_owner,
-            action_key,
-            action_name
-        );
-
-        Self {
-            entity: ai_owner,
-            action_key: action_key,
-            action_name: action_name,
-            action_context: action_context,
-            action_score: action_score,
-        }
-    }
-}
-
-/// The heart of the AI system - the system that actually decides what gets done.
-/// This is the key code that makes this a IAUS Utility AI.
-/// 
-/// The logic here is fundamentally not that complex; we are simply mapping over all 
-/// ActionTemplates from all SmartObjects we have access to, gathering all available Contexts
-/// for those ActionTemplates, scoring all the (ActionTemplate, Context) pairs, and picking the winner.
-/// 
-/// There IS some slight wizardry in how exactly the scoring works, optimization, and other minutia, 
-/// but the core algorithm is a greedy heuristic search with a depth of one; 
-/// basic A* pathfinding is already far more sophisticated than this, but it works, and fast!
-pub(crate) fn decision_process(
-    event: On<AiDecisionRequested>,
-    mut commands: Commands,
-    actionset_store: Res<ActionSetStore>,
-    function_registry: Res<AppFunctionRegistry>,
-) {
-    let entity = event.entity;
-    let maybe_smartobjects = &event.smart_objects;
-    
-    // 1. Gather ActionSets from Smart Objects
-    
-    // Early termination - we have no real options in this case => idle.
-    // Note that there is no notion of available Actions *NOT* tied to a SO; at
-    // minimum, you'd have a SO with the key representing the Controller itself.
-    if let Some(smartobjects) = maybe_smartobjects {
-        let available_actions = smartobjects.actionset_refs.iter().filter_map(
-            |actionset_key| {
-                let maybe_act = actionset_store.map_by_name.get(actionset_key);
-                maybe_act
-            }
-        )
-        .flat_map(|acts| {
-            acts.actions.to_vec()
-        });
-
-        // 2. Score Actions
-        let mut best_score = 0.0;
-        let mut best_action: Option<ScoredAction> = None;
-
-        bevy::log::debug!("Available actions for {:?} are: {:#?}", entity, smartobjects.actionset_refs);
-        
-        for action_spec in available_actions {
-            bevy::log::debug!("{:?}: Evaluating actionspec {:?}", entity, action_spec.name);
-            let best_scoring_combo = action_spec.run_considerations(&function_registry.read(), Some(best_score));
-            if best_scoring_combo.is_none() {
-                continue
-            }
-
-            let best_scoring_combo = best_scoring_combo.unwrap();
-
-            // if we got here, we know RHS >= LHS, otherwise it would have not been a Some<T>
-            best_score = best_scoring_combo.score;
-            best_action = Some(best_scoring_combo);
-        }
-        
-        let best_action = best_action;
-
-        // 3. Trigger best action execution (raise event)
-        if let Some(scored_action) = best_action {
-            bevy::log::debug!("{:?}: Best action is {:?}", entity, scored_action.action.name);
-            let new_current = scored_action.to_owned();
-
-            commands.trigger(AiActionPicked::new(
-                entity,
-                new_current.action.action_key,
-                new_current.action.name,
-                new_current.action.context, 
-                best_score,
-            ));
-        }
-    }
-}
 
 
 /// A lifecycle marker for ActionTrackers to indicate what the status of the tracked Action is. 
@@ -196,7 +47,7 @@ pub(crate) fn decision_process(
 /// - Terminal States should never change at all once reached, 
 /// - Progressed states should only become Terminal or different Progressed States, and
 /// - Initial states can become any other State.
-#[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
+#[derive(Reflect, Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum ActionState {
     // Note that we are NOT implementing Default for this on purpose; 
     // the default state is domain-specific (though probably just Ready most of the time).
@@ -278,6 +129,22 @@ impl ActionState {
 /// Component also has this Component.
 #[derive(Component, Debug)]
 pub struct ActionTracker(ScoredAction);
+
+
+/// An 'extension' Component for ActionTracker Bundles.
+/// 
+/// Adds tracking of the AI Entity that 'owns' the tracked Action. 
+/// 
+/// Bear in mind that Bevy Entities are just Very Fancy IDs; the 
+/// Entity tracked by this Component may no longer be valid - you 
+/// should verify it yourself where necessary.
+/// 
+/// This is primarily intended for tying back Actions to AIs performing them 
+/// and for cancelling any Actions without an associated AI owner.
+#[derive(Component, Debug)]
+pub struct ActionTrackerOwningAI {
+    owner_ai: Entity
+}
 
 
 /// An 'extension' Component for ActionTracker Bundles.
@@ -399,6 +266,7 @@ pub struct ActionTrackerTicks;
 
 #[derive(Debug, Clone)]
 struct ActionTrackerSpawnConfig {
+    track_owner_ai: bool, 
     use_ticker: bool,
     use_create_timer: bool,
     use_runtime_timer: bool,
@@ -414,6 +282,7 @@ impl ActionTrackerSpawnConfig {
 /// Builder pattern for ActionTrackerSpawnConfig
 #[derive(Default, Debug, Clone)]
 pub struct ActionTrackerSpawnConfigBuilder {
+    track_owner_ai: Option<bool>, 
     use_ticker: Option<bool>,
     use_timers: Option<bool>,
     use_create_timer: Option<bool>,
@@ -423,6 +292,7 @@ pub struct ActionTrackerSpawnConfigBuilder {
 
 impl ActionTrackerSpawnConfigBuilder {
     fn build(self) -> ActionTrackerSpawnConfig {
+        let track_owner_ai = self.track_owner_ai.unwrap_or(true);
         let use_ticker = self.use_ticker.unwrap_or(false);
         let use_timers = self.use_timers.unwrap_or(false);
         let use_create_timer = self.use_create_timer.unwrap_or(use_timers);
@@ -430,6 +300,7 @@ impl ActionTrackerSpawnConfigBuilder {
         let use_tick_timer = self.use_tick_timer.unwrap_or(use_ticker && use_timers);
 
         ActionTrackerSpawnConfig {
+            track_owner_ai,
             use_ticker,
             use_create_timer,
             use_runtime_timer,
@@ -439,6 +310,10 @@ impl ActionTrackerSpawnConfigBuilder {
 
     fn new() -> Self {
         self::default()
+    }
+
+    fn set_track_owner_ai(mut self, val: bool) -> Self {
+        self.track_owner_ai = Some(val); self
     }
 
     fn set_use_ticker(mut self, val: bool) -> Self {
@@ -466,6 +341,7 @@ impl ActionTrackerSpawnConfigBuilder {
     /// but you can modify them freely before turning this into a new config.
     fn from_reference_config(config: ActionTrackerSpawnConfig) -> Self {
         Self {
+            track_owner_ai: Some(config.track_owner_ai),
             use_ticker: Some(config.use_ticker),
             use_create_timer: Some(config.use_create_timer),
             use_runtime_timer: Some(config.use_runtime_timer),
@@ -492,6 +368,8 @@ impl From<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
 /// You could DIY it, but using this Event should cover typical usecases for ya.
 #[derive(EntityEvent)]
 pub struct ActionTrackerSpawnRequested {
+    /// NOTE: The entity here is intended to be the AIController.
+    ///       EntityEvent API sadly doesn't let us rename that for clarity.
     entity: Entity, 
     action: ScoredAction, 
     tracker_config: Option<ActionTrackerSpawnConfig>,
@@ -538,20 +416,26 @@ impl ActionTrackerSpawnRequested {
     }
 }
 
-/// An Event notifying Observers that a new ActionTracker has been created.
+/// An Event notifying Observers that a new ActionTracker has been created for an AI.
 #[derive(EntityEvent)]
-pub struct ActionTrackerSpawned {
-    entity: Entity
+pub struct ActionTrackerSpawnedForTargetAI {
+    /// This is the owning AI Entity
+    entity: Entity,
+
+    /// This is the created ActionTracker Entity
+    action_tracker: Entity,
 }
 
 /// Event handler for spawning ActionTrackers for Actions, 
 /// triggered by an ActionTrackerSpawnRequested Event.
 fn actiontracker_spawn_requested(
-    event: On<ActionTrackerSpawnRequested>,
+    trigger: On<ActionTrackerSpawnRequested>,
     mut commands: Commands,
     game_timer: Res<Time>,
     real_timer: Res<Time<Real>>,
 ) {
+    let event = trigger.event();
+    let owner_ai = event.entity;
 
     let mut tracker = commands.spawn((
         ActionTracker(event.action.clone()),
@@ -562,6 +446,12 @@ fn actiontracker_spawn_requested(
         Some(config) => config,
         None => &ActionTrackerSpawnConfig::builder().build()
     };
+
+    if spawn_config.track_owner_ai {
+        tracker.insert(ActionTrackerOwningAI {
+            owner_ai: event.entity
+        });
+    }
 
     if spawn_config.use_ticker {
         // Add ticking to this ActionTracker.
@@ -594,7 +484,10 @@ fn actiontracker_spawn_requested(
     }
 
     // Send a friendly PSA that we have created this Entity for downstream users to hook into.
-    tracker.trigger(|atracker| ActionTrackerSpawned { entity: atracker });
+    tracker.trigger(|atracker| ActionTrackerSpawnedForTargetAI { 
+        entity: owner_ai,
+        action_tracker: atracker,
+    });
 }
 
 
@@ -621,7 +514,7 @@ pub fn actiontracker_done_cleanup_system(
     query: Query<(Entity, &ActionTracker, &ActionTrackerState)>, 
     mut commands: Commands, 
 ) {
-    bevy::log::debug!("Processing ActionTracker cleanup...");
+    // bevy::log::debug!("Processing ActionTracker cleanup...");
 
     for (entity, tracker, state) in query.iter() {
         let is_done = match state.0 {
@@ -658,7 +551,7 @@ pub struct UserDefaultActionTrackerSpawnConfig {
 /// 
 /// Event-driven; responds to AiActionPicked events
 pub(crate) fn create_tracker_for_picked_action(
-    trigger: On<AiActionPicked>,
+    trigger: On<crate::events::AiActionPicked>,
     mut commands: Commands,
     user_default_config_resource: Res<UserDefaultActionTrackerSpawnConfig>,
 ) {
@@ -687,8 +580,6 @@ pub(crate) fn create_tracker_for_picked_action(
 }
 
 
-
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -697,8 +588,10 @@ mod tests {
     use serde_json;
     use crate::actions::ActionTemplate;
     use crate::actionset::ActionSet;
+    use crate::ai::AIController;
     use crate::arg_values::ContextValue;
     use crate::utility_concepts::ContextFetcherIdentifier;
+    use crate::smart_object::{ActionSetStore, SmartObjects};
     use super::*;
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
@@ -740,6 +633,7 @@ mod tests {
                     commands.trigger(TestActionEvent::from_context(
                         tracker.0.action.context.clone(),
                         tracker_ent,
+                        Some(state.0),
                     ));
                 },
                 _ => {}
@@ -793,6 +687,7 @@ mod tests {
     fn test_context_fetcher() -> Vec<crate::actions::ActionContext> {
         let mut context: HashMap<String, ContextValue> = HashMap::with_capacity(3);
         // As an artifact of how we use JSON serde, we need to add escaped quotes around strings here.
+        context.insert("\"Ready\"".to_string(), "\"Running\"".to_string().into());
         context.insert("\"Running\"".to_string(), "\"Failed\"".to_string().into());
         context.insert("\"Failed\"".to_string(), "\"Failed\"".to_string().into());
         context.insert("this".to_string(), TEST_CONTEXT_FETCHER_NAME.to_string().into());
@@ -831,7 +726,7 @@ mod tests {
 
         let ai_id = spawned.id();
 
-        commands.trigger(AiDecisionRequested { 
+        commands.trigger(crate::events::AiDecisionRequested { 
             entity: ai_id,  
             smart_objects: Some(new_sos)
         });
@@ -871,9 +766,9 @@ mod tests {
         .add_observer(create_tracker_for_picked_action)
         .add_observer(actiontracker_spawn_requested)
         .add_observer(actiontracker_despawn_requested)
-        .add_observer(decision_process)
-        .add_observer(test_action)
+        .add_observer(crate::decision_loop::decision_process)
         .add_systems(Update, action_tracker_handler)
+        .add_observer(test_action)
         .add_systems(PostUpdate, actiontracker_done_cleanup_system)
         ;
 

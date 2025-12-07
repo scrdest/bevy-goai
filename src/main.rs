@@ -4,6 +4,7 @@ pub mod actionset;
 pub mod action_runtime;
 pub mod arg_values;
 pub mod brain;
+pub mod decision_loop;
 mod errors;
 pub mod events;
 pub mod utility_concepts;
@@ -12,6 +13,7 @@ pub mod pawn;
 pub mod senses;
 pub mod smart_object;
 pub mod type_registry;
+pub mod types;
 
 
 fn main() {

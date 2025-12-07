@@ -1,11 +1,11 @@
 use bevy::prelude::*;
-use bevy::reflect::{FromType, Reflect};
+// use bevy::reflect::{FromType, Reflect};
 use crate::actions::ActionContext;
-use crate::action_runtime::AiActionPicked;
+use crate::action_runtime::ActionState;
 
 
 pub trait ActionEvent: Event {
-    fn from_context(context: ActionContext, action_tracker: Entity) -> Self;
+    fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self;
 }
 
 
@@ -37,6 +37,75 @@ pub trait ContextFreeActionEvent: ActionEvent + IsContextFree + Default {
 impl<T: ActionEvent + IsContextFree + Default> ContextFreeActionEvent for T {}
 
 
+/// An Event that signals the decision engine picked the new best Action
+/// for a specific AI Entity and provides details about it (abstract ID, 
+/// context, etc.).
+/// 
+/// Primarily expected to be raised by the decision_process() System 
+/// and listened to by consumers for remapping into more Action-specific logic
+/// (e.g. raising an Event for a *specific* Action implementation).
+#[derive(EntityEvent, Debug)]
+pub struct AiActionPicked {
+    /// The AI that picked this Action for execution. 
+    pub entity: Entity,
+
+    /// Identifier for the handling event (e.g. "GoTo"). 
+    /// This is effectively a link to the *implementation* of the action. 
+    pub action_key: crate::types::ActionKey,
+
+    /// Human-readable primary identifier; one action_key may handle distinct action_names 
+    /// (e.g. action_key "GoTo" may cover action_names "Walk", "Run", "Flee", etc.).
+    /// In other words, this is what this action represents *semantically*, and is less likely
+    /// to change for technical purposes.
+    pub action_name: String,
+
+    /// The Context of the Action, i.e. the static input(s) we scored against.
+    pub action_context: ActionContext,
+
+    /// The Utility score; this is so that we can decide whether to possibly 
+    /// override this with a higher-priority Action later on.
+    pub action_score: crate::types::ActionScore,
+}
+
+impl AiActionPicked {
+    pub fn new(
+        ai_owner: Entity,
+        action_key: crate::types::ActionKey,
+        action_name: String,
+        action_context: ActionContext,
+        action_score: crate::types::ActionScore,
+    ) -> Self {
+        
+        bevy::log::debug!(
+            "Creating a new AiActionPicked event for {:?} with key {:?} ({:?})",
+            ai_owner,
+            action_key,
+            action_name
+        );
+
+        Self {
+            entity: ai_owner,
+            action_key: action_key,
+            action_name: action_name,
+            action_context: action_context,
+            action_score: action_score,
+        }
+    }
+}
+
+
+/// Supporting Event for triggering a decision_process() for an AI.
+/// Raised whenever an active AI starts a tick without an Action.
+/// 
+/// Should generally NOT be raised more than once per Entity per tick 
+/// or you are likely running the same calculation multiple times.
+#[derive(EntityEvent)]
+pub struct AiDecisionRequested {
+    pub(crate) entity: Entity,
+    pub smart_objects: Option<crate::smart_object::SmartObjects>,
+}
+
+
 #[cfg(test)]
 mod tests {
     use bevy::log::LogPlugin;
@@ -48,7 +117,7 @@ mod tests {
     struct TestActionEvent(ActionContext);
 
     impl ActionEvent for TestActionEvent {
-        fn from_context(context: ActionContext, action_tracker: Entity) -> Self {
+        fn from_context(context: ActionContext, action_tracker: Entity, action_state: Option<ActionState>) -> Self {
             Self(context)
         }
     }

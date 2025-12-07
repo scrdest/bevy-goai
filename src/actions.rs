@@ -8,7 +8,7 @@ use bevy::reflect::{List, Reflect, func::FunctionRegistry, func::DynamicFunction
 use serde::{Serialize, Deserialize};
 use crate::arg_values::ContextValue;
 use crate::errors::{DynResolutionError};
-use crate::events::ActionEvent;
+use crate::types;
 use crate::type_registry::{IsTypeRegistryIdentifier};
 use crate::utility_concepts::{ContextFetcherIdentifier, CurveIdentifier, ConsiderationIdentifier};
 
@@ -38,9 +38,6 @@ impl Borrow<str> for &DynFuncName {
 impl IsTypeRegistryIdentifier for DynFuncName {}
 
 
-pub type ActionScore = f32;
-
-
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub struct ConsiderationData {
     #[serde(rename="consideration")]
@@ -49,15 +46,15 @@ pub struct ConsiderationData {
     #[serde(rename="curve")]
     curve_name: CurveIdentifier,
 
-    min: ActionScore,
-    max: ActionScore,
+    min: types::ActionScore,
+    max: types::ActionScore,
 }
 
 struct RunnableConsideration<'a, 'b: 'a> {
     func: DynamicFunction<'a>,
     curve: DynamicFunction<'b>,
-    min: ActionScore,
-    max: ActionScore,
+    min: types::ActionScore,
+    max: types::ActionScore,
 }
 
 pub type ActionContext = HashMap<String, ContextValue>;
@@ -78,7 +75,7 @@ pub(crate) struct Action {
 pub(crate) struct ScoredAction {
     /// 
     pub(crate) action: Action,
-    pub(crate) score: ActionScore,
+    pub(crate) score: types::ActionScore,
 }
 
 
@@ -103,7 +100,7 @@ pub struct ActionTemplate {
     #[serde(rename="context_fetcher")]
     pub(crate) context_fetcher_name: ContextFetcherIdentifier,
     pub(crate) considerations: Vec<ConsiderationData>,
-    pub(crate) priority: ActionScore,
+    pub(crate) priority: types::ActionScore,
     pub(crate) action_key: String,
 }
 
