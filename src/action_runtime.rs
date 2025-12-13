@@ -590,6 +590,7 @@ mod tests {
     use crate::actionset::ActionSet;
     use crate::ai::AIController;
     use crate::arg_values::ContextValue;
+    use crate::decision_loop::{self, ContextFetchResponse};
     use crate::utility_concepts::ContextFetcherIdentifier;
     use crate::smart_object::{ActionSetStore, SmartObjects};
     use super::*;
@@ -639,6 +640,24 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    #[derive(Event)]
+    struct RunActionTrackerHandler;
+
+    fn action_tracker_handler_observerized(
+        _trigger: On<RunActionTrackerHandler>,
+        mut query: Query<(
+            Entity, 
+            &ActionTracker, 
+            &mut ActionTrackerState, 
+            Option<&mut ActionTrackerTickTimer>
+        ), With<ActionTrackerTicks>>,
+        game_timer: Res<Time>,
+        real_timer: Res<Time<Real>>,
+        mut commands: Commands,
+    ) {
+        action_tracker_handler(query, game_timer, real_timer, commands);
     }
 
     fn test_action(
@@ -730,6 +749,10 @@ mod tests {
             entity: ai_id,  
             smart_objects: Some(new_sos)
         });
+
+        commands.trigger(RunContextFetcherSystem);
+        commands.trigger(crate::decision_loop::TriggerAiActionScoringPhase);
+        commands.trigger(RunActionTrackerHandler);
     }
 
     fn setup_default_action_tracker_config(
@@ -743,14 +766,64 @@ mod tests {
         config_res.config = Some(new_config.build());
     }
 
+    fn test_context_fetcher_system(
+        mut requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
+        mut responses: MessageWriter<decision_loop::ContextFetchResponse>,
+    ) {
+        // We'll return the same generic, single-option Context for all requests for now.
+        // In a real scenario, this should dispatch to different user systems.
+
+        let mut context: HashMap<String, ContextValue> = HashMap::with_capacity(3);
+        // As an artifact of how we use JSON serde, we need to add escaped quotes around strings here.
+        context.insert("\"Ready\"".to_string(), "\"Running\"".to_string().into());
+        context.insert("\"Running\"".to_string(), "\"Failed\"".to_string().into());
+        context.insert("\"Failed\"".to_string(), "\"Failed\"".to_string().into());
+        context.insert("this".to_string(), TEST_CONTEXT_FETCHER_NAME.to_string().into());
+
+        let context = Vec::from([context]);
+        
+        for req in requests.read() {
+            bevy::log::debug!("Responding to request {:?}", req);
+
+            responses.write(ContextFetchResponse::new(
+                req.action_template.to_owned(),
+                context.to_owned(),
+                req.audience,
+            ));
+        }
+    }
+
+    #[derive(Event)]
+    struct RunContextFetcherSystem;
+
+    /// Same as test_context_fetcher_system(), but event-driven
+    /// This allows us to run this in a single tick nicely.
+    fn test_context_fetcher_observer(
+        trigger: On<RunContextFetcherSystem>,
+        mut requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
+        mut responses: MessageWriter<decision_loop::ContextFetchResponse>,
+    ) {
+        test_context_fetcher_system(requests, responses);
+    }
+
+    /// A simple System that triggers test_context_fetcher_observer() on a regular basis. 
+    /// This means we can still use System-ey scheduling for an event-driven solution.
+    /// Note that Observers DO NOT fire in the same schedule as the parent System!
+    /// They all run in their own special stage, so the behavior is not quite 1:1.
+    fn test_context_fetcher_observer_trigger_system(
+        mut commands: Commands,
+    ) {
+        commands.trigger(RunContextFetcherSystem);
+    }
+
     #[test]
     fn test_run_action() {
         let mut app = App::new();
 
         app
         .add_plugins((
-            // MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(std::time::Duration::from_millis(200))),
-            MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(std::time::Duration::from_millis(200))),
+            // MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 
@@ -760,16 +833,25 @@ mod tests {
         ))
         .init_resource::<UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<ActionSetStore>()
+        .add_message::<decision_loop::ContextFetcherLibraryRequest>()
+        .add_message::<decision_loop::ContextFetchResponse>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
         .add_systems(Startup, setup_test_entity)
         .add_systems(Startup, setup_default_action_tracker_config)
         .add_observer(create_tracker_for_picked_action)
         .add_observer(actiontracker_spawn_requested)
         .add_observer(actiontracker_despawn_requested)
-        .add_observer(crate::decision_loop::decision_process)
-        .add_systems(Update, action_tracker_handler)
+        .add_observer(decision_loop::ai_action_gather_phase)
         .add_observer(test_action)
-        .add_systems(PostUpdate, actiontracker_done_cleanup_system)
+        .add_observer(test_context_fetcher_observer)
+        .add_observer(decision_loop::ai_action_scoring_phase_observer)
+        .add_observer(action_tracker_handler_observerized)
+        .add_systems(FixedUpdate, (
+            test_context_fetcher_observer_trigger_system, 
+            decision_loop::ai_action_scoring_phase_observer_trigger_system,
+            action_tracker_handler,
+        ).chain())
+        .add_systems(FixedPostUpdate, actiontracker_done_cleanup_system)
         ;
 
         app.run();

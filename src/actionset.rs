@@ -71,7 +71,7 @@ mod tests {
         handles: Res<ActionSetHandles>,
         assets: Res<Assets<ActionSet>>,
         timer: Res<LoadTimeout>,
-        mut exit: EventWriter<AppExit>,
+        mut exit: MessageWriter<AppExit>,
     ) {
 
         for (filename, asset_handle) in handles.0.iter() {
@@ -82,7 +82,7 @@ mod tests {
             }
             else {
                 println!("{} => <not loaded> after {}s", filename, timer.0.elapsed_secs());
-                if timer.0.finished() {
+                if timer.0.is_finished() {
                     exit.write(AppExit::Error(NonZero::new(2).unwrap()));
                 }
             }

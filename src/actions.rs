@@ -41,20 +41,20 @@ impl IsTypeRegistryIdentifier for DynFuncName {}
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub struct ConsiderationData {
     #[serde(rename="consideration")]
-    func_name: ConsiderationIdentifier,
+    pub(crate) func_name: ConsiderationIdentifier,
 
     #[serde(rename="curve")]
-    curve_name: CurveIdentifier,
+    pub(crate) curve_name: CurveIdentifier,
 
-    min: types::ActionScore,
-    max: types::ActionScore,
+    pub(crate) min: types::ActionScore,
+    pub(crate) max: types::ActionScore,
 }
 
-struct RunnableConsideration<'a, 'b: 'a> {
-    func: DynamicFunction<'a>,
-    curve: DynamicFunction<'b>,
-    min: types::ActionScore,
-    max: types::ActionScore,
+pub(crate) struct RunnableConsideration<'a, 'b: 'a> {
+    pub(crate) func: DynamicFunction<'a>,
+    pub(crate) curve: DynamicFunction<'b>,
+    pub(crate) min: types::ActionScore,
+    pub(crate) max: types::ActionScore,
 }
 
 pub type ActionContext = HashMap<String, ContextValue>;
@@ -120,11 +120,11 @@ impl ActionTemplate  {
         self.try_resolve_action_function(&self.context_fetcher_name.borrow(), registry).expect("Failed to resolve dynamic ContextFetcher function from a name!")
     }
 
-    fn resolve_consideration(&self, consideration_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
+    pub(crate) fn resolve_consideration(&self, consideration_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
         self.try_resolve_action_function(consideration_name, registry).expect("Failed to resolve dynamic Consideration function from a name!")
     }
 
-    fn resolve_curve(&self, curve_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
+    pub(crate) fn resolve_curve(&self, curve_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
         self.try_resolve_action_function(curve_name, registry).expect("Failed to resolve dynamic Curve function from a name!")
     }
 
