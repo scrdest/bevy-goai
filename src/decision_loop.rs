@@ -1,11 +1,11 @@
 use std::borrow::Borrow;
-use bevy::platform::collections::HashMap;
+use std::collections::HashMap;
 use bevy::prelude::*;
-use bevy::reflect::{func::ArgList};
 use crate::actions::{*};
 use crate::events::AiDecisionRequested;
 use crate::smart_object::ActionSetStore;
-use crate::types::{self, ActionKey, Context};
+use crate::types::{self, ActionScore};
+use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 
 
 /// The heart of the AI system - the system that actually decides what gets done.
@@ -107,7 +107,7 @@ impl ContextFetcherLibraryRequest {
 #[derive(Message, Debug)]
 pub struct ContextFetchResponse {
     /// The meat of the response - the Context that has been requested.
-    contexts: types::ContextList, 
+    contexts: types::ActionContextList, 
     
     /// The ActionTemplate this request came for (mainly to tie it back together as an Action)
     action_template: ActionTemplate, 
@@ -121,7 +121,7 @@ pub struct ContextFetchResponse {
 impl ContextFetchResponse {
     pub fn new(
         action_template: ActionTemplate,
-        contexts: types::ContextList,
+        contexts: types::ActionContextList,
         audience: Entity,
     ) -> Self {
         Self {
@@ -159,7 +159,7 @@ impl ContextFetchResponse {
 pub(crate) fn ai_action_gather_phase(
     event: On<AiDecisionRequested>,
     actionset_store: Res<ActionSetStore>,
-    mut request_writer: If<MessageWriter<ContextFetcherLibraryRequest>>,
+    mut request_writer: MessageWriter<ContextFetcherLibraryRequest>,
 ) {
     let entity = event.event_target();
     let maybe_smartobjects = &event.smart_objects;
@@ -198,142 +198,207 @@ pub(crate) fn ai_action_gather_phase(
 }
 
 
-pub(crate) fn ai_action_scoring_phase(
-    app_registry: Res<AppFunctionRegistry>,
-    mut commands: Commands,
-    mut reader: MessageReader<ContextFetchResponse>,
-) {
-    bevy::log::debug_once!("ai_action_scoring_phase: Triggered ai_action_scoring_phase()");
-    let registry = app_registry.read();
+/// A Message that represents a request to the user code to run a Consideration System 
+/// (plus Curve) corresponding to keys provided and return a ConsiderationResponse Message 
+/// if the associated Action has any chance of getting picked.
+/// 
+/// This is a layer of abstraction between the core AI engine and user code; 
+/// the AI code does not care how exactly you calculate the score for the response, 
+/// just that you get it done somehow.
+#[derive(Message, Debug)]
+pub struct ConsiderationRequest {
+    pub entity: Entity, 
+    pub scored_action_template: types::ActionTemplate,
+    pub scored_context: types::ActionContext,
+    pub consideration_key: ConsiderationIdentifier,
+    pub curve_key: CurveIdentifier,
+    pub min: types::ActionScore,
+    pub max: types::ActionScore,
+}
 
-    // The ContextFetchResponse buffer is not split by source AI. We need to split them up.
-    let mut ai_to_best_map: HashMap<Entity, Option<(f32, &ActionTemplate, &Context)>> = HashMap::new();
+/// A Message that represents a user-code response to a ConsiderationRequest.
+/// 
+/// The expected flow is that library users read ConsiderationRequest messages 
+/// in their apps and write back ConsiderationResponse messages to the engine.
+/// 
+/// This is a layer of abstraction between the core AI engine and user code; 
+/// the AI code does not care how exactly you calculate the score for the response, 
+/// just that you get it done somehow.
+#[derive(Message, Debug)]
+pub struct ConsiderationResponse {
+    pub name: ConsiderationIdentifier, 
+    pub entity: Entity, 
+    pub scored_action_template: types::ActionTemplate,
+    pub scored_context: types::ActionContext,
+    pub score: types::ActionScore,
+}
+
+
+pub(crate) fn ai_action_prescoring_phase(
+    mut reader: MessageReader<ContextFetchResponse>,
+    mut request_writer: MessageWriter<ConsiderationRequest>,
+    // To clear out stale entries in preparation for main scoring:
+    mut best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
+    // We need this for a very specific edge-case, see below:
+    mut response_writer: MessageWriter<ConsiderationResponse>,
+) {
+    bevy::log::debug_once!("ai_action_prescoring_phase: Triggered ai_action_prescoring_phase()");
+
+    // Clear the scores to avoid hangovers between runs.
+    best_scores.current_winner.clear();
 
     for (msg, msg_id) in reader.read_with_id() {
-        bevy::log::debug!("ai_action_scoring_phase: Processing CF message {:?} (ID: {:?})", msg, msg_id);
+        bevy::log::debug!("ai_action_prescoring_phase: Processing CF message {:?} (ID: {:?})", msg, msg_id);
 
         let audience = &msg.audience;
-
-        let best_tuple = ai_to_best_map
-            .get(audience)
-            .cloned()
-            .unwrap_or_default()
-        ;
-
-        let best_score = best_tuple
-            .map(|tup| tup.0)
-            .unwrap_or(0.)
-        ;
-
-
-        let best_ctx = best_tuple
-            .and_then(|tup| Some(tup.1))
-        ;
-
         let action_template = &msg.action_template;
         let considerations = &action_template.considerations;
         let contexts = &msg.contexts;
 
-        let callable_considerations: Vec<RunnableConsideration> = considerations.iter().map(
-            |consdata| {
-                let func = action_template.resolve_consideration(&consdata.func_name.borrow(), &registry);
-                let curve = action_template.resolve_curve(&consdata.curve_name.borrow(), &registry);
-                let min = consdata.min;
-                let max = consdata.max;
-                RunnableConsideration {
-                    func,
-                    curve,
-                    min,
-                    max,
+        for ctx in contexts {
+            bevy::log::debug!("ai_action_prescoring_phase: Scoring context for template {:?}: {:#?}", action_template.name, ctx);
+
+            if considerations.is_empty() {
+                // Special case - an ActionTemplate with NO Considerations always returns max score.
+                // Effectively means that an Action is always available. 
+                // Likely niche, but good QoL for designers in my experience.
+                response_writer.write(ConsiderationResponse { 
+                    name: ConsiderationIdentifier::from("<no Considerations>".to_string()), 
+                    entity: *audience,
+                    scored_action_template: action_template.to_owned(), 
+                    scored_context: ctx.to_owned(), 
+                    score: 1. 
+                });
+                continue;
+            }
+
+            let request_batch = considerations.iter().map(|consdata| {
+                ConsiderationRequest {
+                    entity: *audience,
+                    scored_action_template: action_template.to_owned(),
+                    scored_context: ctx.to_owned(),
+                    consideration_key: consdata.func_name.to_owned(),
+                    curve_key: consdata.curve_name.to_owned(),
+                    min: consdata.min,
+                    max: consdata.max,
+                }
+            });
+            request_writer.write_batch(request_batch);
+
+            // let num_considerations = considerations.len();
+            // if num_considerations > 0 {
+            //     // Correction formula as per GDC 2015 "Building a Better Centaur AI" 
+            //     //   presentation by Dave Mark and Mike Lewis.
+            //     // Ensures that we do not penalize Actions for having multiple Considerations.
+
+            //     let floaty_num_considerations = num_considerations as f32;
+            //     let modification_factor = 1. - (1. / floaty_num_considerations);
+            //     let makeup_val = (1. - curr_score) * modification_factor;
+            //     let adjusted_score = curr_score + (makeup_val * curr_score);
+
+            //     curr_score = adjusted_score
+            // }
+            
+            // bevy::log::debug!("ai_action_prescoring_phase: Scored context for template {:?}: {:#?} => score={:?}, best={:?} ignored={:?}", action_template.name, ctx, curr_score, best_score, ignored);
+        }
+    }
+}
+
+
+pub(crate) fn ai_action_scoring_phase(
+    mut commands: Commands,
+    mut best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
+    mut consideration_reader: MessageReader<ConsiderationResponse>,
+) {
+    let ai_to_best_score = &mut best_scores.current_winner;
+    let mut score_map: HashMap<Entity, (ActionScore, &ActionTemplate, &ActionContext)> = HashMap::new();
+    // let mut ai_and_action_to_consideration_hits: HashMap<(&ActionTemplate, &ActionContext), usize> = HashMap::new();
+
+    for consideration_resp in consideration_reader.read() {
+        bevy::log::debug!(
+            "ai_action_scoring_phase: Scored Consideration {:?} for Context {:?} for ActionTemplate{:#?} => score={:?}", 
+            consideration_resp.name, 
+            consideration_resp.scored_context, 
+            consideration_resp.scored_action_template.name, 
+            consideration_resp.score,
+        );
+        let entity = consideration_resp.entity;
+        let action_template = &consideration_resp.scored_action_template;
+        let action_ctx = &consideration_resp.scored_context;
+
+        let mut curr_raw_score = score_map.get(&entity).map(
+            |trip| trip.0
+        ).unwrap_or(1.);
+        let raw_consideration_score = consideration_resp.score;
+        curr_raw_score *= raw_consideration_score;
+
+        score_map.insert(entity, (curr_raw_score, action_template, action_ctx));
+    }
+
+    for (entity, (curr_raw_score, action_template, action_ctx)) in score_map.iter() {
+        let maybe_best_for_ai = ai_to_best_score.get(&entity);
+
+        let current_is_better = match maybe_best_for_ai {
+            None => true,
+            Some(best_for_ai) => {
+                match best_for_ai {
+                    None => true,
+                    Some(bestcand) => {
+                        let true_score = curr_raw_score * action_template.priority;
+                        let curr_best = bestcand.0;
+                        true_score > curr_best
+                    }
                 }
             }
-        ).collect();
+        };
 
-        for ctx in contexts {
-            bevy::log::debug!("ai_action_scoring_phase: Scoring context for template {:?}: {:#?}", action_template.name, ctx);
-            
-            let mut curr_score: f32 = 1.;
-            let mut ignored: bool = false;
-
-            for consideration in callable_considerations.iter() {
-                let args = ArgList::new()
-                    .with_ref(ctx)
-                ;
-                let dyn_score = consideration.func.call(args).unwrap().unwrap_owned();
-                let cast_score = dyn_score.try_take();
-
-                let score: f32 = cast_score.unwrap_or(0.);
-                curr_score *= score;
-
-                // Early termination; it's not gonna be worth it.
-                if curr_score <= best_score {
-                    // Note that there may be some misbehavior here, as
-                    // we are not accounting for the makeup factor later.
-                    ignored = true;
-                    break;
-                };
-            }
-            
-            if ignored { 
-                // break inner loop, skip the whole context - it's no bueno
-                bevy::log::debug!("ai_action_scoring_phase: Scored context for template {:?}: {:#?} => score={:?}, best={:?} ignored={:?}", action_template.name, ctx, curr_score, best_score, ignored);
-                continue 
-            };
-
-            let num_considerations = considerations.len();
-            if num_considerations > 0 {
-                // Correction formula as per GDC 2015 "Building a Better Centaur AI" 
-                //   presentation by Dave Mark and Mike Lewis.
-                // Ensures that we do not penalize Actions for having multiple Considerations.
-
-                let floaty_num_considerations = num_considerations as f32;
-                let modification_factor = 1. - (1. / floaty_num_considerations);
-                let makeup_val = (1. - curr_score) * modification_factor;
-                let adjusted_score = curr_score + (makeup_val * curr_score);
-
-                curr_score = adjusted_score
-            }
-            
-            bevy::log::debug!("ai_action_scoring_phase: Scored context for template {:?}: {:#?} => score={:?}, best={:?} ignored={:?}", action_template.name, ctx, curr_score, best_score, ignored);
-
-            if best_ctx.is_none() || (curr_score > best_score) {
-                // Update the best score in this round to make sure the remaining stuff beats it.
-                ai_to_best_map.insert(*audience, Some((curr_score, action_template, ctx)));
-            };
+        if current_is_better {
+            ai_to_best_score.insert(
+                *entity, 
+                Some((
+                    curr_raw_score * action_template.priority,
+                    (*action_template).to_owned(),
+                    (*action_ctx).to_owned(),
+                ))
+            );
         }
     }
 
-    for (entity_id, maybe_best_tup) in ai_to_best_map {
-        if let Some(best_tup)= maybe_best_tup {
-            let best_score = best_tup.0;
-            let best_action = best_tup.1;
-            let best_context = best_tup.2;
+    for (entity_id, maybe_best_triple) in best_scores.current_winner.iter() {
+        maybe_best_triple.iter().for_each(
+            |best_triple| {
+                let (
+                    best_score, 
+                    best_act, 
+                    best_ctx
+                ) = best_triple;
 
-            // raise an event for each AI with the highest scoring Action
-            commands.trigger(crate::events::AiActionPicked::new(
-                entity_id,
-                best_action.action_key.to_owned(),
-                best_action.name.to_owned(),
-                best_context.to_owned(), 
-                best_score,
-            ));
-        }
+                commands.trigger(crate::events::AiActionPicked::new(
+                    entity_id.to_owned(),
+                    best_act.action_key.to_owned(),
+                    best_act.name.to_owned(),
+                    best_ctx.to_owned(),
+                    best_score.to_owned(),
+                ));
+            }
+        );
     }
 }
 
 #[derive(Event)]
 pub(crate) struct TriggerAiActionScoringPhase;
 
-pub(crate) fn ai_action_scoring_phase_observer(
+pub(crate) fn ai_action_prescoring_phase_observer(
     _trigger: On<TriggerAiActionScoringPhase>,
-    app_registry: Res<AppFunctionRegistry>,
-    mut commands: Commands,
-    mut reader: MessageReader<ContextFetchResponse>,
+    reader: MessageReader<ContextFetchResponse>,
+    writer: MessageWriter<ConsiderationRequest>,
+    best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
+    response_writer: MessageWriter<ConsiderationResponse>,
 ) {
-    ai_action_scoring_phase(app_registry, commands, reader);
+    ai_action_prescoring_phase(reader, writer, best_scores, response_writer);
 }
 
-pub(crate) fn ai_action_scoring_phase_observer_trigger_system(
+pub(crate) fn ai_action_prescoring_phase_observer_trigger_system(
     mut commands: Commands,
 ) {
     commands.trigger(TriggerAiActionScoringPhase);

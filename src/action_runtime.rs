@@ -43,7 +43,7 @@ impl ActionEvent for TestActionEvent {
 /// 2) Progressed
 /// 3) Terminal
 /// 
-/// *As a general rule*, the progression through those layers should be monotonically non-decreasing, i.e.:
+/// *As a general rule*, the progression through those layers should be non-increasing, i.e.:
 /// - Terminal States should never change at all once reached, 
 /// - Progressed states should only become Terminal or different Progressed States, and
 /// - Initial states can become any other State.
@@ -378,7 +378,7 @@ pub struct ActionTrackerSpawnRequested {
 impl ActionTrackerSpawnRequested {
     /// Create a new ActionTracker spawn request.
     fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
-        bevy::log::debug!("Creating a new ActionTrackerSpawnRequested event for {:?}", action);
+        bevy::log::debug!("ActionTrackerSpawnRequested::new(): Creating a new ActionTrackerSpawnRequested event for {:?}", action);
 
         Self {
             entity: entity, 
@@ -524,10 +524,10 @@ pub fn actiontracker_done_cleanup_system(
             _ => false,
         };
         
-        bevy::log::debug!("ActionTrackerCleanup: Action {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
+        bevy::log::debug!("ActionTrackerCleanup: {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
 
         if is_done {
-            bevy::log::debug!("ActionTrackerCleanup: Action {:?} finished, cleaning up the Tracker", tracker.0.action);
+            bevy::log::debug!("ActionTrackerCleanup: {:?} finished, cleaning up the Tracker", tracker.0.action);
             commands.trigger(ActionTrackerDespawnRequested {
                 entity: entity
             });
@@ -579,6 +579,75 @@ pub(crate) fn create_tracker_for_picked_action(
     );
 }
 
+/// Shared state for the Scoring process. 
+/// 
+/// Tracks the current frontrunner Action and its (final) score, 
+/// after applying all Considerations and the  Priority multiplier.
+/// 
+/// This is used as an optimization for scoring other contenders - if 
+/// another Action's priority-adjusted score dips below the winner's, 
+/// we can ignore further Considerations and discard the candidate altogether.
+/// 
+/// This is because Considerations are strictly non-increasing.
+/// The best-case scenario (max score) keeps the score unchanged, 
+/// and every *other* possible outcome decreases it at least a little bit.
+/// 
+/// Therefore, if an Action dips lower, it will *never* recover the lead.
+#[derive(Debug, Default, Resource)]
+pub(crate) struct BestScoringCandidateTracker {
+    // This is currently a HashMap; might refactor into a Component per AI.
+    pub(crate) current_winner: std::collections::HashMap<
+        Entity, 
+        Option<(
+            crate::types::ActionScore,
+            crate::types::ActionTemplate,
+            crate::types::ActionContext,
+        )>
+    >,
+}
+
+impl BestScoringCandidateTracker {
+    /// Compares the stored candidate for a given Entity with a provided new candidate. 
+    /// Returns true if the new candidate is 
+    pub fn incoming_is_better(
+        &self, 
+        incoming: &(
+            crate::types::ActionScore,
+            crate::types::ActionTemplate,
+            crate::types::ActionContext,
+        ),
+        entity_key: &Entity,
+    ) -> bool {
+        let current = self.current_winner.get(&entity_key);
+
+        match current {
+            None => true,
+            Some(subcurrent) => match subcurrent {
+                None => true,
+                Some((curr_score, curr_action_t, _curr_ctx)) => {
+                    let inc_adj_score = incoming.0 * incoming.1.priority;
+                    let curr_adj_score = curr_score * curr_action_t.priority;
+                    inc_adj_score > curr_adj_score
+                }
+            }
+        }
+    }
+
+    pub fn use_incoming_if_better(
+        &mut self, 
+        entity_key: &Entity,
+        incoming: (
+            crate::types::ActionScore,
+            crate::types::ActionTemplate,
+            crate::types::ActionContext,
+        )
+    ) {
+        if self.incoming_is_better(&incoming, entity_key) {
+            self.current_winner.insert(*entity_key, Some(incoming));
+        };
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -586,18 +655,21 @@ mod tests {
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use serde_json;
-    use crate::actions::ActionTemplate;
+    use crate::actions::{ActionTemplate, ConsiderationData};
     use crate::actionset::ActionSet;
     use crate::ai::AIController;
     use crate::arg_values::ContextValue;
-    use crate::decision_loop::{self, ContextFetchResponse};
-    use crate::utility_concepts::ContextFetcherIdentifier;
+    use crate::decision_loop::{self, ContextFetchResponse, ConsiderationRequest, ConsiderationResponse};
+    use crate::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
     use crate::smart_object::{ActionSetStore, SmartObjects};
     use super::*;
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
 
-    fn action_tracker_handler(
+    /// Mockup of user application code - dispatches actual execution Events 
+    /// based on the key in the library Event to user-implemented Action Systems.
+    /// This specific implementation uses the tick-based Action processing API.
+    fn test_action_tracker_handler(
         mut query: Query<(
             Entity, 
             &ActionTracker, 
@@ -608,7 +680,6 @@ mod tests {
         real_timer: Res<Time<Real>>,
         mut commands: Commands,
     ) {
-        // User application code - dispatches actual execution Events based on the key in the library Event.
         for (tracker_ent, tracker, state, tick_timer) in query.iter_mut() {
             if !state.0.should_process() {
                 bevy::log::debug!("Skipping processing for Action(Tracker) {:?} - {:?}", tracker.0.action.name, state.0);
@@ -645,7 +716,7 @@ mod tests {
     #[derive(Event)]
     struct RunActionTrackerHandler;
 
-    fn action_tracker_handler_observerized(
+    fn test_action_tracker_handler_observerized(
         _trigger: On<RunActionTrackerHandler>,
         mut query: Query<(
             Entity, 
@@ -657,7 +728,7 @@ mod tests {
         real_timer: Res<Time<Real>>,
         mut commands: Commands,
     ) {
-        action_tracker_handler(query, game_timer, real_timer, commands);
+        test_action_tracker_handler(query, game_timer, real_timer, commands);
     }
 
     fn test_action(
@@ -674,10 +745,10 @@ mod tests {
 
         let json_state = serde_json::ser::to_string(&state);
         let state_name = json_state.unwrap();
-        bevy::log::debug!("Current state is {}", state_name);
+        bevy::log::debug!("test_action: Current state is {}", state_name);
 
         let self_name: Option<&String> = maybe_ctx.map(|ctx| ctx.get("this").unwrap().try_into().unwrap());
-        bevy::log::debug!("Self name is {:?}", self_name);
+        bevy::log::debug!("test_action: Self name is {:?}", self_name);
 
         let context_mapping = maybe_ctx.map(|ctx| ctx.get(&state_name)).flatten();
 
@@ -687,17 +758,17 @@ mod tests {
                 let clone_val = cv.clone();
                 let cvstring: String = clone_val.try_into().unwrap();
                 let unjsond = serde_json::de::from_str(&cvstring).unwrap();
-                bevy::log::debug!("Current unjsond is {:?}", unjsond);
+                bevy::log::debug!("test_action: Current unjsond is {:?}", unjsond);
                 unjsond
             }
         }.unwrap();
 
-        bevy::log::debug!("New state is {:?}", new);
+        bevy::log::debug!("test_action: New state is {:?}", new);
 
         match tracker_cmds {
             Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
             Ok(mut cmds) => { 
-                bevy::log::debug!("Updating the ActionTracker {:?} state to new value {:?}", tracker, new);
+                bevy::log::debug!("test_action: Updating the ActionTracker {:?} state to new value {:?}", tracker, new);
                 cmds.insert(ActionTrackerState(new)); 
             },
         }
@@ -721,7 +792,14 @@ mod tests {
             ActionTemplate  {
                 name: "TestAction".to_string(),
                 context_fetcher_name: ContextFetcherIdentifier(TEST_CONTEXT_FETCHER_NAME.to_string()),
-                considerations: Vec::from([]),
+                considerations: Vec::from([
+                    ConsiderationData {
+                        func_name: ConsiderationIdentifier::from("ALWAYS".to_string()),
+                        curve_name: CurveIdentifier::from("Linear".to_string()),
+                        min: 0.,
+                        max: 1.
+                    }
+                ]),
                 priority: 1.,
                 action_key: "TestAction".to_string(),
             }
@@ -747,7 +825,7 @@ mod tests {
 
         commands.trigger(crate::events::AiDecisionRequested { 
             entity: ai_id,  
-            smart_objects: Some(new_sos)
+            smart_objects: Some(new_sos),
         });
 
         commands.trigger(RunContextFetcherSystem);
@@ -790,6 +868,25 @@ mod tests {
                 context.to_owned(),
                 req.audience,
             ));
+        }
+    }
+
+    /// A simple mock Consideration dispatch to test stuff e2e
+    fn test_consideration_runner(
+        mut reader: MessageReader<ConsiderationRequest>,
+        mut writer: MessageWriter<ConsiderationResponse>,
+    ) {
+        for inp in reader.read() {
+
+            writer.write(
+                ConsiderationResponse {
+                    name: inp.consideration_key.to_owned(),
+                    entity: inp.entity,
+                    scored_action_template: inp.scored_action_template.to_owned(),
+                    scored_context: inp.scored_context.to_owned(),
+                    score: 1.,
+                }
+            );
         }
     }
 
@@ -871,8 +968,11 @@ mod tests {
         .init_resource::<UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<ActionSetStore>()
         .init_resource::<DespawnedAnyActionTrackers>()
+        .init_resource::<BestScoringCandidateTracker>()
         .add_message::<decision_loop::ContextFetcherLibraryRequest>()
         .add_message::<decision_loop::ContextFetchResponse>()
+        .add_message::<decision_loop::ConsiderationRequest>()
+        .add_message::<decision_loop::ConsiderationResponse>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
         .add_systems(Startup, setup_test_entity)
         .add_systems(Startup, setup_default_action_tracker_config)
@@ -881,14 +981,18 @@ mod tests {
         .add_observer(actiontracker_despawn_requested)
         .add_observer(decision_loop::ai_action_gather_phase)
         .add_observer(test_action)
-        .add_observer(test_context_fetcher_observer)
-        .add_observer(decision_loop::ai_action_scoring_phase_observer)
-        .add_observer(action_tracker_handler_observerized)
+        // .add_observer(test_context_fetcher_observer)
+        // .add_observer(decision_loop::ai_action_prescoring_phase_observer)
+        // .add_observer(test_action_tracker_handler_observerized)
         .add_observer(mark_despawn_occurred)
         .add_systems(FixedUpdate, (
-            test_context_fetcher_observer_trigger_system, 
-            decision_loop::ai_action_scoring_phase_observer_trigger_system,
-            action_tracker_handler,
+            // test_context_fetcher_observer_trigger_system, 
+            // decision_loop::ai_action_prescoring_phase_observer_trigger_system,
+            test_context_fetcher_system,
+            decision_loop::ai_action_prescoring_phase,
+            test_consideration_runner,
+            decision_loop::ai_action_scoring_phase,
+            test_action_tracker_handler,
         ).chain())
         .add_systems(
             FixedPostUpdate, 
