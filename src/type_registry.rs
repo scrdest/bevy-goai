@@ -184,22 +184,3 @@ pub trait IsTypeRegistryIdentifier: TypeRegistryIdentifierRecoverable {
         }
     }
 }
-
-// pub trait TypeRegistryIdentifierFor<T: 'static + TypeData>: IsTypeRegistryIdentifier {
-//     /// This trait effectively represents a newtype wrapper holding a String that *provably* represents a SPECIFIC *registered* type. 
-//     /// This is more narrow than IsTypeRegistryIdentifier, as not only do we have to prove there is a registered type by that name, 
-//     /// but also that the type is what we're expecting.
-
-//     fn from_string_identifier_typechecked(value: String, registry: &TypeRegistry) -> Result<TypeRegistryIdentifier, DynResolutionError> {
-//         let retrieved = registry.get_with_type_path(&value).map(|tr| tr.contains::<T>());
-//         match retrieved {
-//             None => Err(DynResolutionError::NotInRegistry(value.to_owned())),
-//             Some(maybe_type) => match maybe_type {
-//                 true => Ok(Self::from_string_identifier(value, &registry).unwrap()),
-//                 false => Err(DynResolutionError::UnexpectedType(value.to_owned())),
-//             }
-//         }
-//     }
-
-//     fn to_represented_type(&self, registry: &TypeRegistry) -> T;
-// }

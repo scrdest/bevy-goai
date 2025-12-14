@@ -1,41 +1,13 @@
-// Actions
-
-use std::borrow::Borrow;
+//! Actions
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy::reflect::{List, Reflect, func::FunctionRegistry, func::DynamicFunction, func::ArgList};
+use bevy::reflect::{Reflect};
 use serde::{Serialize, Deserialize};
+
 use crate::arg_values::ContextValue;
-use crate::errors::{DynResolutionError};
 use crate::types;
-use crate::type_registry::{IsTypeRegistryIdentifier};
 use crate::utility_concepts::{ContextFetcherIdentifier, CurveIdentifier, ConsiderationIdentifier};
-
-
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
-#[serde(transparent)]
-pub struct DynFuncName(String);
-
-impl From<String> for DynFuncName {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl Borrow<str> for DynFuncName {
-    fn borrow(&self) -> &str {
-        self.0.borrow()
-    }
-}
-
-impl Borrow<str> for &DynFuncName {
-    fn borrow(&self) -> &str {
-        self.0.borrow()
-    }
-}
-
-impl IsTypeRegistryIdentifier for DynFuncName {}
 
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
@@ -50,19 +22,10 @@ pub struct ConsiderationData {
     pub(crate) max: types::ActionScore,
 }
 
-pub(crate) struct RunnableConsideration<'a, 'b: 'a> {
-    pub(crate) func: DynamicFunction<'a>,
-    pub(crate) curve: DynamicFunction<'b>,
-    pub(crate) min: types::ActionScore,
-    pub(crate) max: types::ActionScore,
-}
-
 pub type ActionContext = HashMap<String, ContextValue>;
 
-
-
 #[derive(Clone, Reflect, Debug)]
-pub(crate) struct Action {
+pub struct Action {
     /// A GOAI action is effectively an ActionTemplate + a selected Context. 
     /// 
     // pub(crate) func: TypeRegistryFuncIdentifier,
@@ -72,7 +35,7 @@ pub(crate) struct Action {
 }
 
 #[derive(Clone, Reflect, Debug)]
-pub(crate) struct ScoredAction {
+pub struct ScoredAction {
     /// 
     pub(crate) action: Action,
     pub(crate) score: types::ActionScore,
@@ -102,117 +65,4 @@ pub struct ActionTemplate {
     pub(crate) considerations: Vec<ConsiderationData>,
     pub(crate) priority: types::ActionScore,
     pub(crate) action_key: String,
-}
-
-impl ActionTemplate  {
-    fn try_resolve_action_function(&self, fn_name: &str, registry: &FunctionRegistry) -> Result<DynamicFunction, DynResolutionError> {
-        let func = registry.get(&fn_name);
-        func
-            .ok_or(DynResolutionError::NotInRegistry(fn_name.to_owned()))
-            .map(|fun| fun.to_owned())
-    }
-
-    fn resolve_action_function(&self, fn_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
-        self.try_resolve_action_function(fn_name, registry).expect("Failed to resolve dynamic function from a name!")
-    }
-
-    fn resolve_context_fetcher(&self, registry: &FunctionRegistry) -> DynamicFunction {
-        self.try_resolve_action_function(&self.context_fetcher_name.borrow(), registry).expect("Failed to resolve dynamic ContextFetcher function from a name!")
-    }
-
-    pub(crate) fn resolve_consideration(&self, consideration_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
-        self.try_resolve_action_function(consideration_name, registry).expect("Failed to resolve dynamic Consideration function from a name!")
-    }
-
-    pub(crate) fn resolve_curve(&self, curve_name: &str, registry: &FunctionRegistry) -> DynamicFunction {
-        self.try_resolve_action_function(curve_name, registry).expect("Failed to resolve dynamic Curve function from a name!")
-    }
-
-    fn get_contexts(&self, registry: &FunctionRegistry) -> Vec<ActionContext> {
-        // todo: error-handling
-        // todo: put world n' stuff into arglist
-        let context_fetcher = self.resolve_context_fetcher(registry);
-        let args = ArgList::new();
-        let raw_result = context_fetcher.call(args);
-        let result = raw_result.unwrap().unwrap_owned();
-        let output: Vec<ActionContext> = result.try_take().unwrap();
-        output
-    }
-
-    pub(crate) fn run_considerations(&self, registry: &FunctionRegistry, best_score_cutoff: Option<f32>) -> Option<ScoredAction> {
-        let callable_considerations: Vec<RunnableConsideration> = self.considerations.iter().map(
-            |dynamiccons| {
-                let consdata: &ConsiderationData = dynamiccons.try_downcast_ref().unwrap();
-                let func = self.resolve_consideration(&consdata.func_name.borrow(), registry);
-                let curve = self.resolve_curve(&consdata.curve_name.borrow(), registry);
-                let min = consdata.min;
-                let max = consdata.max;
-                RunnableConsideration {
-                    func,
-                    curve,
-                    min,
-                    max,
-                }
-            }
-        ).collect();
-
-        let mut best_ctx: Option<&dyn PartialReflect> = None;
-        let mut best_score: f32 = best_score_cutoff.unwrap_or(0.);
-
-        let contexts = self.get_contexts(registry);
-        
-        for context in contexts.iter() {
-            bevy::log::debug!("Scoring context for template {:?}: {:#?}", self.name, context);
-            let mut curr_score: f32 = 1.;
-            let mut ignored: bool = false;
-
-            for consideration in callable_considerations.iter() {
-                let args = ArgList::new()
-                    .with_ref(context)
-                ;
-                let dyn_score = consideration.func.call(args).unwrap().unwrap_owned();
-                let cast_score = dyn_score.try_take();
-
-                let score: f32 = cast_score.unwrap_or(0.);
-                curr_score *= score;
-
-                if curr_score <= best_score {
-                    // early termination; it's not gonna be worth it
-                    ignored = true;
-                    break;
-                };
-            }
-            
-            bevy::log::debug!("Scored context for template {:?}: {:#?} => score={:?}, best={:?} ignored={:?}", self.name, context, curr_score, best_score, ignored);
-            
-            if ignored { 
-                // break inner loop, skip the whole context - it's no bueno
-                continue 
-            };
-
-            if best_ctx.is_none() || (curr_score > best_score) {
-                best_score = curr_score;
-                best_ctx = Some(context);
-            };
-        };
-
-        bevy::log::debug!("Best context for template {:?}: {:#?}", self.name, best_ctx);
-
-        match best_ctx {
-            None => None,
-            Some(ctx) => {
-                let context: ActionContext =  ctx.try_downcast_ref::<ActionContext>().unwrap().to_owned();
-                let name = self.name.to_owned();
-                let action = Action {
-                    name, 
-                    context,
-                    action_key: self.action_key.clone(),
-                };
-                Some(ScoredAction {
-                    action,
-                    score: best_score,
-                })
-            }
-        }
-    }
 }

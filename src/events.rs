@@ -117,7 +117,7 @@ mod tests {
     struct TestActionEvent(ActionContext);
 
     impl ActionEvent for TestActionEvent {
-        fn from_context(context: ActionContext, action_tracker: Entity, action_state: Option<ActionState>) -> Self {
+        fn from_context(context: ActionContext, _action_tracker: Entity, _action_state: Option<ActionState>) -> Self {
             Self(context)
         }
     }

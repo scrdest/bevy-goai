@@ -37,6 +37,3 @@ pub struct ActionSetStore {
 pub struct SmartObjects {
     pub actionset_refs: Vec<String>
 }
-
-
-

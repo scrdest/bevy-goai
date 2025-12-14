@@ -265,7 +265,7 @@ pub struct ActionTrackerTicks;
 
 
 #[derive(Debug, Clone)]
-struct ActionTrackerSpawnConfig {
+pub struct ActionTrackerSpawnConfig {
     track_owner_ai: bool, 
     use_ticker: bool,
     use_create_timer: bool,
@@ -274,7 +274,7 @@ struct ActionTrackerSpawnConfig {
 }
 
 impl ActionTrackerSpawnConfig {
-    fn builder() -> ActionTrackerSpawnConfigBuilder {
+    pub fn builder() -> ActionTrackerSpawnConfigBuilder {
         ActionTrackerSpawnConfigBuilder::default()
     }
 }
@@ -291,7 +291,7 @@ pub struct ActionTrackerSpawnConfigBuilder {
 }
 
 impl ActionTrackerSpawnConfigBuilder {
-    fn build(self) -> ActionTrackerSpawnConfig {
+    pub fn build(self) -> ActionTrackerSpawnConfig {
         let track_owner_ai = self.track_owner_ai.unwrap_or(true);
         let use_ticker = self.use_ticker.unwrap_or(false);
         let use_timers = self.use_timers.unwrap_or(false);
@@ -308,38 +308,38 @@ impl ActionTrackerSpawnConfigBuilder {
         }
     }
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         self::default()
     }
 
-    fn set_track_owner_ai(mut self, val: bool) -> Self {
+    pub fn set_track_owner_ai(mut self, val: bool) -> Self {
         self.track_owner_ai = Some(val); self
     }
 
-    fn set_use_ticker(mut self, val: bool) -> Self {
+    pub fn set_use_ticker(mut self, val: bool) -> Self {
         self.use_ticker = Some(val); self
     }
 
-    fn set_use_timers(mut self, val: bool) -> Self {
+    pub fn set_use_timers(mut self, val: bool) -> Self {
         self.use_timers = Some(val); self
     }
 
-    fn set_use_create_timer(mut self, val: bool) -> Self {
+    pub fn set_use_create_timer(mut self, val: bool) -> Self {
         self.use_create_timer = Some(val); self
     }
 
-    fn set_use_runtime_timer(mut self, val: bool) -> Self {
+    pub fn set_use_runtime_timer(mut self, val: bool) -> Self {
         self.use_runtime_timer = Some(val); self
     }
 
-    fn set_use_tick_timer(mut self, val: bool) -> Self {
+    pub fn set_use_tick_timer(mut self, val: bool) -> Self {
         self.use_tick_timer = Some(val); self
     }
 
     /// Creates a new builder using an existing config as a starting point.
     /// This means the values are preconfigured to match the existing config, 
     /// but you can modify them freely before turning this into a new config.
-    fn from_reference_config(config: ActionTrackerSpawnConfig) -> Self {
+    pub fn from_reference_config(config: ActionTrackerSpawnConfig) -> Self {
         Self {
             track_owner_ai: Some(config.track_owner_ai),
             use_ticker: Some(config.use_ticker),
@@ -370,14 +370,14 @@ impl From<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
 pub struct ActionTrackerSpawnRequested {
     /// NOTE: The entity here is intended to be the AIController.
     ///       EntityEvent API sadly doesn't let us rename that for clarity.
-    entity: Entity, 
-    action: ScoredAction, 
-    tracker_config: Option<ActionTrackerSpawnConfig>,
+    pub entity: Entity, 
+    pub action: ScoredAction, 
+    pub tracker_config: Option<ActionTrackerSpawnConfig>,
 }
 
 impl ActionTrackerSpawnRequested {
     /// Create a new ActionTracker spawn request.
-    fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
+    pub fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
         bevy::log::debug!("ActionTrackerSpawnRequested::new(): Creating a new ActionTrackerSpawnRequested event for {:?}", action);
 
         Self {
@@ -388,12 +388,12 @@ impl ActionTrackerSpawnRequested {
     }
 
     /// Create a new ActionTracker spawn request, with whatever defaults the library picked for you. 
-    fn with_library_defaults(entity: Entity, action: ScoredAction) -> Self {
+    pub fn with_library_defaults(entity: Entity, action: ScoredAction) -> Self {
         Self::new(entity, action, None)
     }
 
     /// Create a new ActionTracker spawn request with a specified config.
-    fn with_config(entity: Entity, action: ScoredAction, config: ActionTrackerSpawnConfig) -> Self {
+    pub fn with_config(entity: Entity, action: ScoredAction, config: ActionTrackerSpawnConfig) -> Self {
         Self::new(entity, action, Some(config))
     }
 
@@ -403,7 +403,7 @@ impl ActionTrackerSpawnRequested {
     /// Kind of like the `Option::or_else()` API and the like, lazy evaluation.
     /// 
     /// Mainly a syntax sugar API so you don't have to create a Builder yourself.
-    fn with_config_builder(
+    pub fn with_config_builder(
         entity: Entity, 
         action: ScoredAction, 
         builder: &mut dyn FnMut(ActionTrackerSpawnConfigBuilder) -> Option<ActionTrackerSpawnConfig>,
@@ -420,15 +420,15 @@ impl ActionTrackerSpawnRequested {
 #[derive(EntityEvent)]
 pub struct ActionTrackerSpawnedForTargetAI {
     /// This is the owning AI Entity
-    entity: Entity,
+    pub entity: Entity,
 
     /// This is the created ActionTracker Entity
-    action_tracker: Entity,
+    pub action_tracker: Entity,
 }
 
 /// Event handler for spawning ActionTrackers for Actions, 
 /// triggered by an ActionTrackerSpawnRequested Event.
-fn actiontracker_spawn_requested(
+pub(crate) fn actiontracker_spawn_requested(
     trigger: On<ActionTrackerSpawnRequested>,
     mut commands: Commands,
     game_timer: Res<Time>,
@@ -503,7 +503,7 @@ pub struct ActionTrackerDespawnRequested {
 /// As each Tracker is its own unique Entity, this will clean up the whole bundle (including optional modules).
 /// 
 /// If you want to invoke callbacks on success/failure/etc., this should happen BEFORE this event is raised.
-fn actiontracker_despawn_requested(
+pub(crate) fn actiontracker_despawn_requested(
     event: On<ActionTrackerDespawnRequested>,
     mut commands: Commands,
 ) {
@@ -718,7 +718,7 @@ mod tests {
 
     fn test_action_tracker_handler_observerized(
         _trigger: On<RunActionTrackerHandler>,
-        mut query: Query<(
+        query: Query<(
             Entity, 
             &ActionTracker, 
             &mut ActionTrackerState, 
@@ -726,7 +726,7 @@ mod tests {
         ), With<ActionTrackerTicks>>,
         game_timer: Res<Time>,
         real_timer: Res<Time<Real>>,
-        mut commands: Commands,
+        commands: Commands,
     ) {
         test_action_tracker_handler(query, game_timer, real_timer, commands);
     }
@@ -934,8 +934,8 @@ mod tests {
     /// This allows us to run this in a single tick nicely.
     fn test_context_fetcher_observer(
         _trigger: On<RunContextFetcherSystem>,
-        mut requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
-        mut responses: MessageWriter<decision_loop::ContextFetchResponse>,
+        requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
+        responses: MessageWriter<decision_loop::ContextFetchResponse>,
     ) {
         test_context_fetcher_system(requests, responses);
     }
