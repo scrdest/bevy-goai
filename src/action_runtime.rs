@@ -793,13 +793,50 @@ mod tests {
         }
     }
 
+    /// Helper for triggering AppExit. 
+    /// If True, we have actually despawned at least one tracker.
+    /// This is needed so we don't stop BEFORE any trackers are created.
+    #[derive(Resource)]
+    struct DespawnedAnyActionTrackers(bool);
+
+    impl Default for DespawnedAnyActionTrackers {
+        fn default() -> Self {
+            Self(false)
+        }
+    }
+
+    /// Helper for triggering AppExit. 
+    /// Updates the DespawnedAnyActionTrackers on a despawn.
+    fn mark_despawn_occurred(
+        _trigger: On<ActionTrackerDespawnRequested>,
+        mut marker: ResMut<DespawnedAnyActionTrackers>
+    ) {
+        marker.0 = true;
+    }
+
+    /// Calls AppExit if there are no running tasks left and at least one has been despawned.
+    /// This is a helper to make it easier to test in a loop without manually killing the app.
+    fn exit_on_finish_all_tasks(
+        query: Query<&ActionTracker>,
+        despawned: Res<DespawnedAnyActionTrackers>,
+        mut exit_writer: MessageWriter<AppExit>,
+    ) {
+        if !despawned.0 {
+            return;
+        }
+
+        if query.is_empty() {
+            exit_writer.write(AppExit::Success);
+        }
+    }
+
     #[derive(Event)]
     struct RunContextFetcherSystem;
 
     /// Same as test_context_fetcher_system(), but event-driven
     /// This allows us to run this in a single tick nicely.
     fn test_context_fetcher_observer(
-        trigger: On<RunContextFetcherSystem>,
+        _trigger: On<RunContextFetcherSystem>,
         mut requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
         mut responses: MessageWriter<decision_loop::ContextFetchResponse>,
     ) {
@@ -833,6 +870,7 @@ mod tests {
         ))
         .init_resource::<UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<ActionSetStore>()
+        .init_resource::<DespawnedAnyActionTrackers>()
         .add_message::<decision_loop::ContextFetcherLibraryRequest>()
         .add_message::<decision_loop::ContextFetchResponse>()
         .register_function_with_name(TEST_CONTEXT_FETCHER_NAME, test_context_fetcher)
@@ -846,12 +884,19 @@ mod tests {
         .add_observer(test_context_fetcher_observer)
         .add_observer(decision_loop::ai_action_scoring_phase_observer)
         .add_observer(action_tracker_handler_observerized)
+        .add_observer(mark_despawn_occurred)
         .add_systems(FixedUpdate, (
             test_context_fetcher_observer_trigger_system, 
             decision_loop::ai_action_scoring_phase_observer_trigger_system,
             action_tracker_handler,
         ).chain())
-        .add_systems(FixedPostUpdate, actiontracker_done_cleanup_system)
+        .add_systems(
+            FixedPostUpdate, 
+            (
+                actiontracker_done_cleanup_system,
+                exit_on_finish_all_tasks,
+            )
+        )
         ;
 
         app.run();
