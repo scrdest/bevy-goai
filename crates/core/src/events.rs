@@ -67,7 +67,7 @@ impl AiActionPicked {
 /// or you are likely running the same calculation multiple times.
 #[derive(EntityEvent)]
 pub struct AiDecisionRequested {
-    pub(crate) entity: Entity,
+    pub entity: Entity,
     pub smart_objects: Option<crate::smart_object::SmartObjects>,
 }
 

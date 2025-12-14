@@ -22,6 +22,22 @@ pub struct ConsiderationData {
     pub(crate) max: types::ActionScore,
 }
 
+impl ConsiderationData {
+    pub fn new(
+        func_name: ConsiderationIdentifier,
+        curve_name: CurveIdentifier,
+        min: types::ActionScore,
+        max: types::ActionScore,
+    ) -> Self {
+        Self {
+            func_name,
+            curve_name,
+            min, 
+            max, 
+        }
+    }
+}
+
 pub type ActionContext = HashMap<String, ContextValue>;
 
 #[derive(Clone, Reflect, Debug)]
@@ -29,16 +45,16 @@ pub struct Action {
     /// A GOAI action is effectively an ActionTemplate + a selected Context. 
     /// 
     // pub(crate) func: TypeRegistryFuncIdentifier,
-    pub(crate) name: String,
-    pub(crate) context: ActionContext,
-    pub(crate) action_key: String,
+    pub name: String,
+    pub context: ActionContext,
+    pub action_key: String,
 }
 
 #[derive(Clone, Reflect, Debug)]
 pub struct ScoredAction {
     /// 
-    pub(crate) action: Action,
-    pub(crate) score: types::ActionScore,
+    pub action: Action,
+    pub score: types::ActionScore,
 }
 
 
@@ -59,10 +75,10 @@ pub struct ActionTemplate {
     // 
     // name = identifier. Two ActionTemplates may share the same function (as an implementation detail), 
     //                    but represent very different logical activities. This helps AI designers not go mad.
-    pub(crate) name: String, 
+    pub name: String, 
     #[serde(rename="context_fetcher")]
-    pub(crate) context_fetcher_name: ContextFetcherIdentifier,
-    pub(crate) considerations: Vec<ConsiderationData>,
-    pub(crate) priority: types::ActionScore,
-    pub(crate) action_key: String,
+    pub context_fetcher_name: ContextFetcherIdentifier,
+    pub considerations: Vec<ConsiderationData>,
+    pub priority: types::ActionScore,
+    pub action_key: String,
 }

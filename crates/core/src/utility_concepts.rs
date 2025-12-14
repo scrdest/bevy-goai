@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 #[serde(transparent)]
-pub struct ContextFetcherIdentifier(pub(crate) String);
+pub struct ContextFetcherIdentifier(pub String);
 
 impl From<String> for ContextFetcherIdentifier {
     fn from(value: String) -> Self {

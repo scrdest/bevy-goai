@@ -80,7 +80,7 @@ impl ContextFetchResponse {
 /// 
 /// Even if the AI requests a CF that no longer exists, it will simply ignore the associated Action as 
 /// a possibility (which may mean the AI is a bit silly, but the app as a whole can continue operating)!
-pub(crate) fn ai_action_gather_phase(
+pub fn ai_action_gather_phase(
     event: On<AiDecisionRequested>,
     actionset_store: Res<ActionSetStore>,
     mut request_writer: MessageWriter<ContextFetcherLibraryRequest>,
@@ -158,7 +158,7 @@ pub struct ConsiderationResponse {
 }
 
 
-pub(crate) fn ai_action_prescoring_phase(
+pub fn ai_action_prescoring_phase(
     mut reader: MessageReader<ContextFetchResponse>,
     mut request_writer: MessageWriter<ConsiderationRequest>,
     // To clear out stale entries in preparation for main scoring:
@@ -229,7 +229,7 @@ pub(crate) fn ai_action_prescoring_phase(
 }
 
 
-pub(crate) fn ai_action_scoring_phase(
+pub fn ai_action_scoring_phase(
     mut commands: Commands,
     mut best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
     mut consideration_reader: MessageReader<ConsiderationResponse>,
