@@ -17,7 +17,7 @@ pub struct ContextFetcherLibraryRequest {
 }
 
 impl ContextFetcherLibraryRequest {
-    fn new(
+    pub fn new(
         audience: Entity, 
         action_template: ActionTemplate,
     ) -> Self {
@@ -31,15 +31,15 @@ impl ContextFetcherLibraryRequest {
 #[derive(Message, Debug)]
 pub struct ContextFetchResponse {
     /// The meat of the response - the Context that has been requested.
-    contexts: types::ActionContextList, 
+    pub contexts: types::ActionContextList, 
     
     /// The ActionTemplate this request came for (mainly to tie it back together as an Action)
-    action_template: ActionTemplate, 
+    pub action_template: ActionTemplate, 
 
     /// The AI this was requested for; primarily so that we can split 
     /// the scoring process per each Audience, 
     /// even if the Messages for them wind up interleaved.
-    audience: Entity, 
+    pub audience: Entity, 
 }
 
 impl ContextFetchResponse {
@@ -309,21 +309,21 @@ pub(crate) fn ai_action_scoring_phase(
     }
 }
 
-#[derive(Event)]
-pub(crate) struct TriggerAiActionScoringPhase;
+// #[derive(Event)]
+// pub(crate) struct TriggerAiActionScoringPhase;
 
-pub(crate) fn ai_action_prescoring_phase_observer(
-    _trigger: On<TriggerAiActionScoringPhase>,
-    reader: MessageReader<ContextFetchResponse>,
-    writer: MessageWriter<ConsiderationRequest>,
-    best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
-    response_writer: MessageWriter<ConsiderationResponse>,
-) {
-    ai_action_prescoring_phase(reader, writer, best_scores, response_writer);
-}
+// pub(crate) fn ai_action_prescoring_phase_observer(
+//     _trigger: On<TriggerAiActionScoringPhase>,
+//     reader: MessageReader<ContextFetchResponse>,
+//     writer: MessageWriter<ConsiderationRequest>,
+//     best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
+//     response_writer: MessageWriter<ConsiderationResponse>,
+// ) {
+//     ai_action_prescoring_phase(reader, writer, best_scores, response_writer);
+// }
 
-pub(crate) fn ai_action_prescoring_phase_observer_trigger_system(
-    mut commands: Commands,
-) {
-    commands.trigger(TriggerAiActionScoringPhase);
-}
+// pub(crate) fn ai_action_prescoring_phase_observer_trigger_system(
+//     mut commands: Commands,
+// ) {
+//     commands.trigger(TriggerAiActionScoringPhase);
+// }

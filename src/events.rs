@@ -1,40 +1,6 @@
 use bevy::prelude::*;
 // use bevy::reflect::{FromType, Reflect};
 use crate::actions::ActionContext;
-use crate::action_runtime::ActionState;
-
-
-pub trait ActionEvent: Event {
-    fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self;
-}
-
-
-/// Marker trait intended for types implementing ActionEvent.
-/// Indicates that the ActionEvent does not use any Context values. 
-/// 
-/// This implies the construction of ActionEvents for this type is trivial; 
-/// all ActionEvents must be constructable using just the Context, and for 
-/// these the Context is irrelevant as well (so we can create them at will).
-/// 
-/// In particular, if the type implements this AND Default, the Default constructor
-/// is guaranteed to work as a constructor for a triggerable Event as well.
-pub trait IsContextFree {}
-
-
-/// Marker trait for ActionEvents that do not make use of the Context, 
-/// and can therefore be implemented cheaply using the type's Default implementation. 
-/// (blanket-implemented for all matching types of ActionEvent types).
-/// This is meant for either: 
-/// 
-/// (1) events that store no data at all (i.e. empty structs deriving Event), or 
-/// (2) events that only store stuff in safely defaultable containers to be filled in later.
-pub trait ContextFreeActionEvent: ActionEvent + IsContextFree + Default {
-    fn from_context(_context: ActionContext) -> Self {
-        Self::default()
-    }
-}
-
-impl<T: ActionEvent + IsContextFree + Default> ContextFreeActionEvent for T {}
 
 
 /// An Event that signals the decision engine picked the new best Action
@@ -114,13 +80,7 @@ mod tests {
     use crate::ai::AIController;
 
     #[derive(Debug, Default, Event)]
-    struct TestActionEvent(ActionContext);
-
-    impl ActionEvent for TestActionEvent {
-        fn from_context(context: ActionContext, _action_tracker: Entity, _action_state: Option<ActionState>) -> Self {
-            Self(context)
-        }
-    }
+    struct TestActionEvent;
 
     fn setup_test_entity(
         mut commands: Commands,
@@ -152,7 +112,7 @@ mod tests {
         let actionkey = evt.action_key.as_str();
 
         match actionkey {
-            "TestActionEvent" => { commands.trigger(TestActionEvent(evt.action_context.to_owned())) }
+            "TestActionEvent" => { commands.trigger(TestActionEvent) }
             _ => { panic!("Unrecognized Action Key: {}", actionkey) }
         };
     }

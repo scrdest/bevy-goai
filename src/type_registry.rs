@@ -64,7 +64,7 @@ impl<'a> From<Res<'a, AppFunctionRegistry>> for ReflectTypeRegistry<'a> {
 }
 
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct TypeRegistryTypeIdentifier(pub String); // un-pub the field!!!
+pub struct TypeRegistryTypeIdentifier(pub(crate) String); 
 
 impl Borrow<str> for TypeRegistryTypeIdentifier {
     fn borrow(&self) -> &str {
@@ -74,7 +74,7 @@ impl Borrow<str> for TypeRegistryTypeIdentifier {
 
 
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
-pub(crate) struct TypeRegistryFuncIdentifier(String);
+pub struct TypeRegistryFuncIdentifier(String);
 
 impl Borrow<str> for TypeRegistryFuncIdentifier {
     fn borrow(&self) -> &str {
@@ -85,7 +85,7 @@ impl Borrow<str> for TypeRegistryFuncIdentifier {
 
 
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
-pub(crate) enum TypeRegistryIdentifier{
+pub enum TypeRegistryIdentifier{
     Type(TypeRegistryTypeIdentifier),
     AppType(TypeRegistryTypeIdentifier),
     Func(TypeRegistryFuncIdentifier),

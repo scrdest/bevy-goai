@@ -2,39 +2,6 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use crate::actions::{Action, ScoredAction};
 
-/* Experimental nonsense, remove me */
-use crate::actions::ActionContext;
-use crate::events::ActionEvent;
-
-#[derive(Debug, EntityEvent)]
-struct TestActionEvent{
-    /// NOTE: entity is expected to be an ActionTracker here.
-    entity: Entity, 
-    ctx: ActionContext,
-    state: ActionState,
-}
-
-impl TestActionEvent {
-    fn with_default_context(action_tracker: Entity) -> Self {
-        Self { 
-            entity: action_tracker,
-            ctx: Default::default(), 
-            state: ActionState::Running 
-        }
-    }
-}
-
-impl ActionEvent for TestActionEvent {
-    fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
-        Self {
-            entity: action_tracker,
-            ctx: context,
-            state: state.unwrap_or(ActionState::Ready),
-        }
-    }
-}
-/* END EXPERIMENTAL NONSENSE */
-
 
 /// A lifecycle marker for ActionTrackers to indicate what the status of the tracked Action is. 
 /// 
@@ -655,7 +622,7 @@ mod tests {
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use serde_json;
-    use crate::actions::{ActionTemplate, ConsiderationData};
+    use crate::actions::{ActionTemplate, ActionContext, ConsiderationData};
     use crate::actionset::ActionSet;
     use crate::ai::AIController;
     use crate::arg_values::ContextValue;
@@ -665,6 +632,32 @@ mod tests {
     use super::*;
 
     const TEST_CONTEXT_FETCHER_NAME: &str = "TestCF";
+
+    #[derive(Debug, EntityEvent)]
+    struct TestActionEvent{
+        /// NOTE: entity is expected to be an ActionTracker here.
+        entity: Entity, 
+        ctx: ActionContext,
+        state: ActionState,
+    }
+
+    impl TestActionEvent {
+        fn with_default_context(action_tracker: Entity) -> Self {
+            Self { 
+                entity: action_tracker,
+                ctx: Default::default(), 
+                state: ActionState::Running 
+            }
+        }
+
+        fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
+            Self {
+                entity: action_tracker,
+                ctx: context,
+                state: state.unwrap_or(ActionState::Ready),
+            }
+        }
+    }
 
     /// Mockup of user application code - dispatches actual execution Events 
     /// based on the key in the library Event to user-implemented Action Systems.
@@ -713,23 +706,23 @@ mod tests {
         }
     }
 
-    #[derive(Event)]
-    struct RunActionTrackerHandler;
+    // #[derive(Event)]
+    // struct RunActionTrackerHandler;
 
-    fn test_action_tracker_handler_observerized(
-        _trigger: On<RunActionTrackerHandler>,
-        query: Query<(
-            Entity, 
-            &ActionTracker, 
-            &mut ActionTrackerState, 
-            Option<&mut ActionTrackerTickTimer>
-        ), With<ActionTrackerTicks>>,
-        game_timer: Res<Time>,
-        real_timer: Res<Time<Real>>,
-        commands: Commands,
-    ) {
-        test_action_tracker_handler(query, game_timer, real_timer, commands);
-    }
+    // fn test_action_tracker_handler_observerized(
+    //     _trigger: On<RunActionTrackerHandler>,
+    //     query: Query<(
+    //         Entity, 
+    //         &ActionTracker, 
+    //         &mut ActionTrackerState, 
+    //         Option<&mut ActionTrackerTickTimer>
+    //     ), With<ActionTrackerTicks>>,
+    //     game_timer: Res<Time>,
+    //     real_timer: Res<Time<Real>>,
+    //     commands: Commands,
+    // ) {
+    //     test_action_tracker_handler(query, game_timer, real_timer, commands);
+    // }
 
     fn test_action(
         trigger: On<TestActionEvent>, 
@@ -828,9 +821,9 @@ mod tests {
             smart_objects: Some(new_sos),
         });
 
-        commands.trigger(RunContextFetcherSystem);
-        commands.trigger(crate::decision_loop::TriggerAiActionScoringPhase);
-        commands.trigger(RunActionTrackerHandler);
+        // commands.trigger(RunContextFetcherSystem);
+        // commands.trigger(crate::decision_loop::TriggerAiActionScoringPhase);
+        // commands.trigger(RunActionTrackerHandler);
     }
 
     fn setup_default_action_tracker_config(
@@ -927,28 +920,28 @@ mod tests {
         }
     }
 
-    #[derive(Event)]
-    struct RunContextFetcherSystem;
+    // #[derive(Event)]
+    // struct RunContextFetcherSystem;
 
-    /// Same as test_context_fetcher_system(), but event-driven
-    /// This allows us to run this in a single tick nicely.
-    fn test_context_fetcher_observer(
-        _trigger: On<RunContextFetcherSystem>,
-        requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
-        responses: MessageWriter<decision_loop::ContextFetchResponse>,
-    ) {
-        test_context_fetcher_system(requests, responses);
-    }
+    // /// Same as test_context_fetcher_system(), but event-driven
+    // /// This allows us to run this in a single tick nicely.
+    // fn test_context_fetcher_observer(
+    //     _trigger: On<RunContextFetcherSystem>,
+    //     requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
+    //     responses: MessageWriter<decision_loop::ContextFetchResponse>,
+    // ) {
+    //     test_context_fetcher_system(requests, responses);
+    // }
 
-    /// A simple System that triggers test_context_fetcher_observer() on a regular basis. 
-    /// This means we can still use System-ey scheduling for an event-driven solution.
-    /// Note that Observers DO NOT fire in the same schedule as the parent System!
-    /// They all run in their own special stage, so the behavior is not quite 1:1.
-    fn test_context_fetcher_observer_trigger_system(
-        mut commands: Commands,
-    ) {
-        commands.trigger(RunContextFetcherSystem);
-    }
+    // /// A simple System that triggers test_context_fetcher_observer() on a regular basis. 
+    // /// This means we can still use System-ey scheduling for an event-driven solution.
+    // /// Note that Observers DO NOT fire in the same schedule as the parent System!
+    // /// They all run in their own special stage, so the behavior is not quite 1:1.
+    // fn test_context_fetcher_observer_trigger_system(
+    //     mut commands: Commands,
+    // ) {
+    //     commands.trigger(RunContextFetcherSystem);
+    // }
 
     #[test]
     fn test_run_action() {

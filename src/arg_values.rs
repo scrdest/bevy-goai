@@ -7,7 +7,7 @@ use crate::type_registry::TypeRegistryIdentifier;
 
 
 #[enum_delegate::register]
-trait IsPrimitiveContextValue {}
+pub trait IsPrimitiveContextValue {}
 
 impl IsPrimitiveContextValue for bool {}
 impl IsPrimitiveContextValue for u32 {}
@@ -27,7 +27,7 @@ enum PrimitiveContextValue {
 }
 
 #[enum_delegate::register]
-trait IsContextValue {}
+pub trait IsContextValue {}
 
 // A pair of mutually exclusive marker traits for blanket impls.
 // ContextValueIsOpaque <=> !ContextValueIsTransparent effectively, similar to how ?Sized works.
