@@ -5,11 +5,14 @@ use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use serde_json;
 use bevy_goai::actions::{ActionTemplate, ActionContext, ConsiderationData};
-use goai_core::action_runtime::*;
+use bevy_goai::action_runtime::*;
+use bevy_goai::action_state::ActionState;
 use bevy_goai::actionset::ActionSet;
 use bevy_goai::ai::AIController;
 use bevy_goai::arg_values::ContextValue;
-use bevy_goai::decision_loop::{self, ContextFetchResponse, ConsiderationRequest, ConsiderationResponse};
+use bevy_goai::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
+use bevy_goai::considerations::{ConsiderationRequest, ConsiderationResponse};
+use bevy_goai::decision_loop;
 use bevy_goai::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_goai::smart_object::{ActionSetStore, SmartObjects};
 
@@ -220,8 +223,8 @@ fn setup_default_action_tracker_config(
 }
 
 fn example_context_fetcher_system(
-    mut requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
-    mut responses: MessageWriter<decision_loop::ContextFetchResponse>,
+    mut requests: MessageReader<ContextFetcherRequest>,
+    mut responses: MessageWriter<ContextFetchResponse>,
 ) {
     // We'll return the same generic, single-option Context for all requests for now.
     // In a real scenario, this should dispatch to different user systems.
@@ -309,7 +312,7 @@ fn exit_on_finish_all_tasks(
 // /// This allows us to run this in a single tick nicely.
 // fn example_context_fetcher_observer(
 //     _trigger: On<RunContextFetcherSystem>,
-//     requests: MessageReader<decision_loop::ContextFetcherLibraryRequest>,
+//     requests: MessageReader<decision_loop::ContextFetcherRequest>,
 //     responses: MessageWriter<decision_loop::ContextFetchResponse>,
 // ) {
 //     example_context_fetcher_system(requests, responses);
@@ -343,10 +346,10 @@ fn main() {
     .init_resource::<ActionSetStore>()
     .init_resource::<DespawnedAnyActionTrackers>()
     .init_resource::<BestScoringCandidateTracker>()
-    .add_message::<decision_loop::ContextFetcherLibraryRequest>()
-    .add_message::<decision_loop::ContextFetchResponse>()
-    .add_message::<decision_loop::ConsiderationRequest>()
-    .add_message::<decision_loop::ConsiderationResponse>()
+    .add_message::<ContextFetcherRequest>()
+    .add_message::<ContextFetchResponse>()
+    .add_message::<ConsiderationRequest>()
+    .add_message::<ConsiderationResponse>()
     .register_function_with_name(EXAMPLE_CONTEXT_FETCHER_NAME, example_context_fetcher)
     .add_systems(Startup, setup_example_entity)
     .add_systems(Startup, setup_default_action_tracker_config)

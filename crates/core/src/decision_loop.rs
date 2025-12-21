@@ -1,60 +1,13 @@
 use std::collections::HashMap;
 use bevy::prelude::*;
 use crate::actions::{*};
+use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
+use crate::considerations::{ConsiderationRequest, ConsiderationResponse};
 use crate::events::AiDecisionRequested;
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionScore};
-use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
+use crate::utility_concepts::{ConsiderationIdentifier};
 
-/// A Message representing a single request for a ContextFetcher call from the AI lib to user code. 
-/// 
-/// Users are expected to implement a System that uses a MessageReader for this type and dispatches 
-/// their custom logic to handle them on a case-by-case basis..
-#[derive(Message, Debug)]
-pub struct ContextFetcherLibraryRequest {
-    pub action_template: ActionTemplate,
-    pub audience: Entity, 
-}
-
-impl ContextFetcherLibraryRequest {
-    pub fn new(
-        audience: Entity, 
-        action_template: ActionTemplate,
-    ) -> Self {
-        Self {
-            action_template: action_template,
-            audience: audience,
-        }
-    }
-}
-
-#[derive(Message, Debug)]
-pub struct ContextFetchResponse {
-    /// The meat of the response - the Context that has been requested.
-    pub contexts: types::ActionContextList, 
-    
-    /// The ActionTemplate this request came for (mainly to tie it back together as an Action)
-    pub action_template: ActionTemplate, 
-
-    /// The AI this was requested for; primarily so that we can split 
-    /// the scoring process per each Audience, 
-    /// even if the Messages for them wind up interleaved.
-    pub audience: Entity, 
-}
-
-impl ContextFetchResponse {
-    pub fn new(
-        action_template: ActionTemplate,
-        contexts: types::ActionContextList,
-        audience: Entity,
-    ) -> Self {
-        Self {
-            action_template: action_template,
-            contexts: contexts,
-            audience: audience,
-        }
-    }
-}
 
 /// Stage 1 of an AI decision loop. 
 /// 
@@ -83,7 +36,7 @@ impl ContextFetchResponse {
 pub fn ai_action_gather_phase(
     event: On<AiDecisionRequested>,
     actionset_store: Res<ActionSetStore>,
-    mut request_writer: MessageWriter<ContextFetcherLibraryRequest>,
+    mut request_writer: MessageWriter<ContextFetcherRequest>,
 ) {
     let entity = event.event_target();
     let maybe_smartobjects = &event.smart_objects;
@@ -112,49 +65,13 @@ pub fn ai_action_gather_phase(
             bevy::log::debug!("ai_action_gather_phase: AI {:?}: Requesting Contexts for actionspec {:?}", entity, action_spec.name);
             
             request_writer.write(
-                ContextFetcherLibraryRequest::new(
+                ContextFetcherRequest::new(
                     entity,
                     action_spec.clone(),
                 )
             );
         }
     }
-}
-
-
-/// A Message that represents a request to the user code to run a Consideration System 
-/// (plus Curve) corresponding to keys provided and return a ConsiderationResponse Message 
-/// if the associated Action has any chance of getting picked.
-/// 
-/// This is a layer of abstraction between the core AI engine and user code; 
-/// the AI code does not care how exactly you calculate the score for the response, 
-/// just that you get it done somehow.
-#[derive(Message, Debug)]
-pub struct ConsiderationRequest {
-    pub entity: Entity, 
-    pub scored_action_template: types::ActionTemplate,
-    pub scored_context: types::ActionContext,
-    pub consideration_key: ConsiderationIdentifier,
-    pub curve_key: CurveIdentifier,
-    pub min: types::ActionScore,
-    pub max: types::ActionScore,
-}
-
-/// A Message that represents a user-code response to a ConsiderationRequest.
-/// 
-/// The expected flow is that library users read ConsiderationRequest messages 
-/// in their apps and write back ConsiderationResponse messages to the engine.
-/// 
-/// This is a layer of abstraction between the core AI engine and user code; 
-/// the AI code does not care how exactly you calculate the score for the response, 
-/// just that you get it done somehow.
-#[derive(Message, Debug)]
-pub struct ConsiderationResponse {
-    pub name: ConsiderationIdentifier, 
-    pub entity: Entity, 
-    pub scored_action_template: types::ActionTemplate,
-    pub scored_context: types::ActionContext,
-    pub score: types::ActionScore,
 }
 
 
