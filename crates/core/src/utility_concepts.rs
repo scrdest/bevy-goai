@@ -38,7 +38,7 @@ impl Borrow<str> for CurveIdentifier {
 }
 
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
+#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ConsiderationIdentifier(String);
 
@@ -51,6 +51,12 @@ impl From<String> for ConsiderationIdentifier {
 impl Borrow<str> for ConsiderationIdentifier {
     fn borrow(&self) -> &str {
         self.0.borrow()
+    }
+}
+
+impl std::fmt::Display for ConsiderationIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 

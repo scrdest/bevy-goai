@@ -1,17 +1,18 @@
 use bevy_goai::*;
+use goai_core::types::ActionScore;
 
 use std::collections::HashMap;
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use serde_json;
-use bevy_goai::actions::{ActionTemplate, ActionContext, ConsiderationData};
+use bevy_goai::actions::{ActionTemplate, ActionContext};
 use bevy_goai::action_runtime::*;
 use bevy_goai::action_state::ActionState;
 use bevy_goai::actionset::ActionSet;
 use bevy_goai::ai::AIController;
 use bevy_goai::arg_values::ContextValue;
 use bevy_goai::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use bevy_goai::considerations::{ConsiderationRequest, ConsiderationResponse};
+use bevy_goai::considerations::{BatchedConsiderationRequest, ConsiderationResponse, ConsiderationData};
 use bevy_goai::decision_loop;
 use bevy_goai::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_goai::smart_object::{ActionSetStore, SmartObjects};
@@ -165,6 +166,7 @@ fn example_context_fetcher() -> Vec<crate::actions::ActionContext> {
 fn setup_example_entity(
     mut commands: Commands,
     mut actionset_store: ResMut<ActionSetStore>,
+    mut consideration_registry: ResMut<decision_loop::ConsiderationKeyToSystemIdMap>,
 ) {
     let example_actions = [
         ActionTemplate  {
@@ -189,6 +191,10 @@ fn setup_example_entity(
     };
 
     actionset_store.map_by_name.insert(example_actionset.name.to_owned(), example_actionset);
+    consideration_registry.mapping.insert(
+        ConsiderationIdentifier::from("ALWAYS".to_string()), 
+        commands.register_system(ex_cons_one)
+    );
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
@@ -249,22 +255,45 @@ fn example_context_fetcher_system(
     }
 }
 
-/// A simple mock Consideration dispatch to example stuff e2e
-fn example_consideration_runner(
-    mut reader: MessageReader<ConsiderationRequest>,
+#[derive(EntityEvent)]
+struct SimpleConsiderationRequest {
+    entity: Entity,
+    scored_action_template: ActionTemplate,
+    scored_context: ActionContext,
+}
+
+/// A trivial Consideration implementation using Events. 
+/// Returns 1. (i.e. max score) for any inputs.
+fn simple_consideration_impl(
+    trigger: On<SimpleConsiderationRequest>,
     mut writer: MessageWriter<ConsiderationResponse>,
 ) {
-    for inp in reader.read() {
+    let req = trigger.event();
+    writer.write(
+        ConsiderationResponse {
+            entity: req.entity,
+            scored_action_template: req.scored_action_template.to_owned(),
+            scored_context: req.scored_context.to_owned(),
+            score: 1.,
+        }
+    );
+}
 
-        writer.write(
-            ConsiderationResponse {
-                name: inp.consideration_key.to_owned(),
+/// A simple mock Consideration dispatch to example stuff e2e
+fn example_consideration_runner(
+    mut reader: MessageReader<BatchedConsiderationRequest>,
+    mut commands: Commands,
+) {
+    for inp in reader.read() {
+        for _cons in inp.considerations.iter() {
+            // In a real scenario we'd match on the func_name in the Consideration
+            // and dispatch to different Events based on that.
+            commands.trigger(SimpleConsiderationRequest {
                 entity: inp.entity,
                 scored_action_template: inp.scored_action_template.to_owned(),
                 scored_context: inp.scored_context.to_owned(),
-                score: 1.,
-            }
-        );
+            });
+        }
     }
 }
 
@@ -305,28 +334,27 @@ fn exit_on_finish_all_tasks(
     }
 }
 
-// #[derive(Event)]
-// struct RunContextFetcherSystem;
+fn ex_cons_one(
+    qry: Query<&ActionTrackerState>
+) -> ActionScore {
+    let mut good_cnt = 0;
+    let mut bad_cnt = 0;
 
-// /// Same as example_context_fetcher_system(), but event-driven
-// /// This allows us to run this in a single tick nicely.
-// fn example_context_fetcher_observer(
-//     _trigger: On<RunContextFetcherSystem>,
-//     requests: MessageReader<decision_loop::ContextFetcherRequest>,
-//     responses: MessageWriter<decision_loop::ContextFetchResponse>,
-// ) {
-//     example_context_fetcher_system(requests, responses);
-// }
+    for tracker in qry {
+        match tracker.0 {
+            ActionState::Failed => { bad_cnt += 1 },
+            _ => { good_cnt += 1 },
+        }
+    }
 
-// /// A simple System that triggers example_context_fetcher_observer() on a regular basis. 
-// /// This means we can still use System-ey scheduling for an event-driven solution.
-// /// Note that Observers DO NOT fire in the same schedule as the parent System!
-// /// They all run in their own special stage, so the behavior is not quite 1:1.
-// fn example_context_fetcher_observer_trigger_system(
-//     mut commands: Commands,
-// ) {
-//     commands.trigger(RunContextFetcherSystem);
-// }
+    let total_cnt = good_cnt + bad_cnt;
+
+    if total_cnt > 0 {
+        (good_cnt as ActionScore) / (total_cnt as ActionScore)
+    } else {
+        1.
+    }
+}
 
 fn main() {
     let mut app = App::new();
@@ -346,9 +374,10 @@ fn main() {
     .init_resource::<ActionSetStore>()
     .init_resource::<DespawnedAnyActionTrackers>()
     .init_resource::<BestScoringCandidateTracker>()
+    .init_resource::<decision_loop::ConsiderationKeyToSystemIdMap>()
     .add_message::<ContextFetcherRequest>()
     .add_message::<ContextFetchResponse>()
-    .add_message::<ConsiderationRequest>()
+    .add_message::<BatchedConsiderationRequest>()
     .add_message::<ConsiderationResponse>()
     .register_function_with_name(EXAMPLE_CONTEXT_FETCHER_NAME, example_context_fetcher)
     .add_systems(Startup, setup_example_entity)
@@ -357,14 +386,10 @@ fn main() {
     .add_observer(actiontracker_spawn_requested)
     .add_observer(actiontracker_despawn_requested)
     .add_observer(decision_loop::ai_action_gather_phase)
+    .add_observer(simple_consideration_impl)
     .add_observer(example_action)
-    // .add_observer(example_context_fetcher_observer)
-    // .add_observer(decision_loop::ai_action_prescoring_phase_observer)
-    // .add_observer(example_action_tracker_handler_observerized)
     .add_observer(mark_despawn_occurred)
     .add_systems(FixedUpdate, (
-        // example_context_fetcher_observer_trigger_system, 
-        // decision_loop::ai_action_prescoring_phase_observer_trigger_system,
         example_context_fetcher_system,
         decision_loop::ai_action_prescoring_phase,
         example_consideration_runner,
@@ -376,7 +401,7 @@ fn main() {
         (
             actiontracker_done_cleanup_system,
             exit_on_finish_all_tasks,
-        )
+        ).chain()
     )
     ;
 
