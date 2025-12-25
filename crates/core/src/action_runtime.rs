@@ -27,7 +27,7 @@ pub struct ActionTracker(pub ScoredAction);
 /// and for cancelling any Actions without an associated AI owner.
 #[derive(Component, Debug)]
 pub struct ActionTrackerOwningAI {
-    owner_ai: Entity
+    pub owner_ai: crate::types::EntityIdentifier
 }
 
 
@@ -333,7 +333,7 @@ pub fn actiontracker_spawn_requested(
 
     if spawn_config.track_owner_ai {
         tracker.insert(ActionTrackerOwningAI {
-            owner_ai: event.entity
+            owner_ai: event.entity.into()
         });
     }
 
@@ -411,7 +411,10 @@ pub fn actiontracker_done_cleanup_system(
         bevy::log::debug!("ActionTrackerCleanup: {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
 
         if is_done {
-            bevy::log::debug!("ActionTrackerCleanup: {:?} finished, cleaning up the Tracker", tracker.0.action);
+            bevy::log::info!(
+                "ActionTrackerCleanup: Action {:?} of AI {:?} finished, cleaning up the Tracker", 
+                tracker.0.action.name, entity
+            );
             commands.trigger(ActionTrackerDespawnRequested {
                 entity: entity
             });
@@ -462,76 +465,6 @@ pub fn create_tracker_for_picked_action(
         )
     );
 }
-
-/// Shared state for the Scoring process. 
-/// 
-/// Tracks the current frontrunner Action and its (final) score, 
-/// after applying all Considerations and the  Priority multiplier.
-/// 
-/// This is used as an optimization for scoring other contenders - if 
-/// another Action's priority-adjusted score dips below the winner's, 
-/// we can ignore further Considerations and discard the candidate altogether.
-/// 
-/// This is because Considerations are strictly non-increasing.
-/// The best-case scenario (max score) keeps the score unchanged, 
-/// and every *other* possible outcome decreases it at least a little bit.
-/// 
-/// Therefore, if an Action dips lower, it will *never* recover the lead.
-#[derive(Debug, Default, Resource)]
-pub struct BestScoringCandidateTracker {
-    // This is currently a HashMap; might refactor into a Component per AI.
-    pub(crate) current_winner: std::collections::HashMap<
-        Entity, 
-        Option<(
-            crate::types::ActionScore,
-            crate::types::ActionTemplate,
-            crate::types::ActionContext,
-        )>
-    >,
-}
-
-impl BestScoringCandidateTracker {
-    /// Compares the stored candidate for a given Entity with a provided new candidate. 
-    /// Returns true if the new candidate is 
-    pub fn incoming_is_better(
-        &self, 
-        incoming: &(
-            crate::types::ActionScore,
-            crate::types::ActionTemplate,
-            crate::types::ActionContext,
-        ),
-        entity_key: &Entity,
-    ) -> bool {
-        let current = self.current_winner.get(&entity_key);
-
-        match current {
-            None => true,
-            Some(subcurrent) => match subcurrent {
-                None => true,
-                Some((curr_score, curr_action_t, _curr_ctx)) => {
-                    let inc_adj_score = incoming.0 * incoming.1.priority;
-                    let curr_adj_score = curr_score * curr_action_t.priority;
-                    inc_adj_score > curr_adj_score
-                }
-            }
-        }
-    }
-
-    pub fn use_incoming_if_better(
-        &mut self, 
-        entity_key: &Entity,
-        incoming: (
-            crate::types::ActionScore,
-            crate::types::ActionTemplate,
-            crate::types::ActionContext,
-        )
-    ) {
-        if self.incoming_is_better(&incoming, entity_key) {
-            self.current_winner.insert(*entity_key, Some(incoming));
-        };
-    }
-}
-
 
 // #[cfg(test)]
 // mod tests {

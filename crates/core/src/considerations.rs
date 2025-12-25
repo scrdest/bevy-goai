@@ -74,7 +74,7 @@ pub struct ConsiderationMappedToSystemIds {
 /// for it - Considerations can be fairly complex and expensive queries, so the fewer, the better.
 #[derive(Message, Debug, Clone)]
 pub struct BatchedConsiderationRequest {
-    pub entity: Entity, 
+    pub entity: types::EntityIdentifier, 
     pub scored_action_template: types::ActionTemplate,
     pub scored_context: types::ActionContext,
     /// To cheaply reference ScoredContext - tuple of (MsgId, CtxIdx)
@@ -92,7 +92,7 @@ pub struct BatchedConsiderationRequest {
 /// just that you get it done somehow.
 #[derive(Message, Debug)]
 pub struct ConsiderationResponse {
-    pub entity: Entity, 
+    pub entity: types::EntityIdentifier, 
     pub scored_action_template: types::ActionTemplate,
     pub scored_context: types::ActionContext,
     pub score: types::ActionScore,

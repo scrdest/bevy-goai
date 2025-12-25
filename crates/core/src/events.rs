@@ -100,7 +100,7 @@ mod tests {
             action_key: "TestActionEvent".into(),
             action_context: ctx2,
             action_score: 1.,
-            entity: entity,
+            entity: entity.into(),
         });
     }
 

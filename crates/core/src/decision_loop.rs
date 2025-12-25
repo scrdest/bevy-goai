@@ -4,11 +4,12 @@ use bevy::prelude::*;
 use bevy::ecs::system::{SystemId, SystemState};
 use crate::actions::{*};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds, ConsiderationResponse};
+use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds};
+use crate::curves::{SupportedUtilityCurve, UtilityCurve, resolve_curve_from_name};
 use crate::events::AiDecisionRequested;
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionScore};
-use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
+use crate::utility_concepts::{ConsiderationIdentifier};
 
 
 /// Stage 1 of an AI decision loop. 
@@ -68,7 +69,7 @@ pub fn ai_action_gather_phase(
             
             request_writer.write(
                 ContextFetcherRequest::new(
-                    entity,
+                    entity.into(),
                     action_spec.clone(),
                 )
             );
@@ -81,15 +82,8 @@ pub fn ai_action_prescoring_phase(
     system_id_map: Res<ConsiderationKeyToSystemIdMap>,
     mut reader: MessageReader<ContextFetchResponse>,
     mut request_writer: MessageWriter<BatchedConsiderationRequest>,
-    // To clear out stale entries in preparation for main scoring:
-    mut best_scores: ResMut<crate::action_runtime::BestScoringCandidateTracker>,
-    // We need this for a very specific edge-case, see below:
-    mut response_writer: MessageWriter<ConsiderationResponse>,
 ) {
     bevy::log::debug_once!("ai_action_prescoring_phase: Triggered ai_action_prescoring_phase()");
-
-    // Clear the scores to avoid hangovers between runs.
-    best_scores.current_winner.clear();
 
     for (msg, msg_id) in reader.read_with_id() {
         bevy::log::debug!("ai_action_prescoring_phase: Processing CF message {:?} (ID: {:?})", msg, msg_id);
@@ -101,19 +95,6 @@ pub fn ai_action_prescoring_phase(
 
         for (ctx_idx, ctx) in contexts.iter().enumerate() {
             bevy::log::debug!("ai_action_prescoring_phase: Scoring context for template {:?}: {:#?}", action_template.name, ctx);
-
-            if considerations.is_empty() {
-                // Special case - an ActionTemplate with NO Considerations always returns max score.
-                // Effectively means that an Action is always available. 
-                // Likely niche, but good QoL for designers in my experience.
-                response_writer.write(ConsiderationResponse { 
-                    entity: *audience,
-                    scored_action_template: action_template.to_owned(), 
-                    scored_context: ctx.to_owned(), 
-                    score: 1. 
-                });
-                continue;
-            }
 
             let system_ids = considerations.iter().map(|con| {
                 let mapped = system_id_map.mapping
@@ -132,29 +113,13 @@ pub fn ai_action_prescoring_phase(
             });
 
             let request_batch = BatchedConsiderationRequest {
-                entity: *audience,
+                entity: audience.clone(),
                 scored_action_template: action_template.to_owned(),
                 scored_context: ctx.to_owned(),
                 scored_context_index: (msg_id.id, ctx_idx),
                 considerations: system_ids.collect(),
             };
             request_writer.write(request_batch);
-
-            // let num_considerations = considerations.len();
-            // if num_considerations > 0 {
-            //     // Correction formula as per GDC 2015 "Building a Better Centaur AI" 
-            //     //   presentation by Dave Mark and Mike Lewis.
-            //     // Ensures that we do not penalize Actions for having multiple Considerations.
-
-            //     let floaty_num_considerations = num_considerations as f32;
-            //     let modification_factor = 1. - (1. / floaty_num_considerations);
-            //     let makeup_val = (1. - curr_score) * modification_factor;
-            //     let adjusted_score = curr_score + (makeup_val * curr_score);
-
-            //     curr_score = adjusted_score
-            // }
-            
-            // bevy::log::debug!("ai_action_prescoring_phase: Scored context for template {:?}: {:#?} => score={:?}, best={:?} ignored={:?}", action_template.name, ctx, curr_score, best_score, ignored);
         }
     }
 }
@@ -209,6 +174,14 @@ fn consideration_adjustment(
     let makeup_val = (1. - score) * modification_factor;
     let adjusted_score = score + (makeup_val * score);
 
+    bevy::log::debug!(
+        "Adjusted raw score {:?} w/ {:?} (float: {:?}) Considerations to {:?}",
+        score,
+        num_considerations,
+        floaty_num_considerations,
+        adjusted_score,
+    );
+
     adjusted_score
 }
 
@@ -262,28 +235,34 @@ pub fn ai_action_scoring_phase(
     let mut at_rc_pool: HashMap<String, Rc<ActionTemplate>> = HashMap::new();
 
     for msg in messages {
-        bevy::log::debug!("ai_action_scoring_phase: processing {:?}", &msg);
-        let ai = msg.entity;
+        bevy::log::debug!("AI {:?} - ai_action_scoring_phase: processing Ctx {:?} for Action {:?}", 
+            &msg.entity,
+            &msg.scored_context_index, 
+            &msg.scored_action_template.name,
+        );
+        let ai = &msg.entity;
 
         let curr_best_for_ai = best_scoring_for_ai
             .get(&ai)
             .map(|tup| tup.0)
-            .unwrap_or(types::MIN_CONSIDERATION_SCORE)
         ;
 
-        if curr_best_for_ai >= msg.scored_action_template.priority {
-            // Priority forms a ceiling for maximum final score.
-            // At Priority 1, the max score is 1.0; at 2 -> 2.0; at 5 -> 5.0 etc.
-            // If we have a Priority 1 Action and the high score is 2.2, we will never beat it.
-            // 
-            // Note that in general, a lower-Priority template can still win over a higher-Priority one; 
-            // this would happen if the high-Priority score gets cut down heavily by its Considerations.
-            // 
-            // For example, a P1 Idle can beat P5 Heal if IsHurt Consideration for the latter returns 0 
-            // (and so the final score for Heal is 5.0 * 0.0 => 0.0)
-            // 
-            // Here, we are tracking the top SCORE, not top PRIORITY processed, so skipping is valid.
-            continue;
+        // We do not unwrap curr_best_for_ai fully to be clearer when it's null vs zero.
+        if let Some(some_curr_best) = curr_best_for_ai {
+            if some_curr_best >= msg.scored_action_template.priority {
+                // Priority forms a ceiling for maximum final score.
+                // At Priority 1, the max score is 1.0; at 2 -> 2.0; at 5 -> 5.0 etc.
+                // If we have a Priority 1 Action and the high score is 2.2, we will never beat it.
+                // 
+                // Note that in general, a lower-Priority template can still win over a higher-Priority one; 
+                // this would happen if the high-Priority score gets cut down heavily by its Considerations.
+                // 
+                // For example, a P1 Idle can beat P5 Heal if IsHurt Consideration for the latter returns 0 
+                // (and so the final score for Heal is 5.0 * 0.0 => 0.0)
+                // 
+                // Here, we are tracking the top SCORE, not top PRIORITY processed, so skipping is valid.
+                continue;
+            }
         }
         
         let maybe_curr_template = at_rc_pool
@@ -307,7 +286,7 @@ pub fn ai_action_scoring_phase(
         }
         
         let best_score_for_template = best_scoring_template
-            .get(&(ai, curr_template.clone()))
+            .get(&(ai.entity(), curr_template.clone()))
         ;
 
         // The current total score for this AI + Action
@@ -315,52 +294,120 @@ pub fn ai_action_scoring_phase(
         let mut consideration_count: usize = 0;
 
         for (cons_cnt, cons) in msg.considerations.iter().enumerate() {
+            let maybe_resolved_curve: Option<SupportedUtilityCurve> = resolve_curve_from_name(
+                &cons.curve_name
+            );
+
+            if maybe_resolved_curve.is_none() {
+                bevy::log::warn!(
+                    "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve!", 
+                    &msg.entity,
+                    &cons.curve_name
+                );
+            }
+
+            // TODO: This currently panics to stop the AIs from inadvertently triggering some possibly 
+            //       Very Bad Actions on the user side. We could just skip the whole thing, but that 
+            //       seems like confusing, implicit behavior. Might give users a way to opt into more 
+            //       graceful fallback handling later (e.g. use a ConstZero curve, or Linear, or w/e).
+            let resolved_curve = maybe_resolved_curve
+                .expect("Failed to resolve a Curve key to a supported Utility Curve");
+
             match cons.consideration_systemid {
-                Err(_) => bevy::log::debug!("Failed to resolve Consideration '{:}' to a System!", cons.func_name),
+                Err(_) => bevy::log::debug!(
+                    "AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
+                    &msg.entity,
+                    &cons.func_name
+                ),
                 Ok(system_id) => {
                     let res = world.run_system(system_id);
-                    match res {
-                        Ok(positive) => bevy::log::debug!(
-                            "Consideration '{:}' Score: {:?}", 
-                            cons.func_name, 
-                            positive
-                        ),
-                        Err(negative) => {
-                                bevy::log::debug!(
-                                "Consideration '{:}' errored: {:?}", 
-                                cons.func_name, 
-                                negative
+                    if res.is_err() {
+                        bevy::log::debug!(
+                            "AI {:?} - Consideration '{:}' errored: {:?}", 
+                            &msg.entity, 
+                            &cons.func_name, 
+                            &res
+                        );
+                        continue;
+                    };
+
+                    let raw_score = res.expect(
+                        "Failed to unwrap a res to a raw_score. It should always be Ok, but is Err somehow."
+                    );
+
+                    let (true_min, true_max) = match cons.min <= cons.max {
+                        true => (cons.min, cons.max),
+                        false => {
+                            bevy::log::error!(
+                                "Min/Max values for Consideration {:?} in Action {:?} 
+                                were flipped, min={:?} > max={:?}. 
+                                They have been flipped back so Min<=Max for you for now. 
+                                This fixup is not guaranteed to be in place in future versions of the library!",
+                                cons.func_name,
+                                curr_template.name,
+                                cons.min,
+                                cons.max,
                             );
-                            continue;
+                            (cons.max, cons.min)
                         }
-                    }
+                    };
+
+                    // Remap the raw Consideration score (arbitrary value) to a unit interval. 
+                    // Values outside of range get saturated to min/max (as appropriate), so 
+                    // e.g. if min = -1 and raw_score = -5, we read the raw_score as just -1.
+                    // Similarly if max = -4 and raw_score = -1, we read the raw_score as just -4.
+                    let rescaled_score = (raw_score - true_min).clamp(true_min, true_max) / (true_max - true_min);
 
                     let curr_template_best = best_score_for_template.copied().unwrap_or(
                         types::MIN_CONSIDERATION_SCORE
                     );
 
-                    let raw_score = res.unwrap();
-                    // todo apply curve!
-                    let score = raw_score;
+                    let score = resolved_curve.sample_safe(rescaled_score);
 
                     // The actual (raw) score is the product of all Consideration scores so far.
                     curr_score *= score;
+
+                    bevy::log::debug!(
+    "AI {:?} - Consideration '{:}' for Action {:?}: 
+    - Raw score => {:?}
+    - Rescaled w/ min/max => {:?}
+    - Adjusted w/ Curve {:?} => {:?}
+    - Current running total score for Action => {:?}",
+                        msg.entity,
+                        cons.func_name,
+                        curr_template.name,
+                        raw_score,
+                        rescaled_score,
+                        cons.curve_name,
+                        score,
+                        curr_score,
+                    );
 
                     // There is a superior Context for this ActionTemplate.
                     // We don't need to bother checking other Considerations for this Context, 
                     // as it will not get picked anyway.
                     if curr_template_best >= curr_score {
+                        
+                        bevy::log::debug!(
+                            "AI {:?} - Consideration '{:}' for Action {:?} - score {:?} is below the template best of {:?}, discarding the Context.",
+                            msg.entity,
+                            cons.func_name,
+                            curr_template.name,
+                            score,
+                            curr_template_best,
+                        );
                         break;
                     }
 
                     // We need to know how many Considerations we have processed for later.
-                    consideration_count = cons_cnt;
+                    // Enumerate starts at zero, so we need to add one to adjust.
+                    consideration_count = cons_cnt + 1;
                 }
             }
         }
         
         best_scoring_template.insert(
-            (ai, curr_template.clone()), 
+            (ai.entity(), curr_template.clone()), 
             // Each Context has the same amount of Considerations and same Priority, 
             // so we can store and compare raw scores without the other cruft.
             curr_score
@@ -368,25 +415,44 @@ pub fn ai_action_scoring_phase(
 
         let adjusted_score = consideration_adjustment(
             curr_score, 
-            consideration_count
+            consideration_count,
         );
 
         // todo: add a parametrizeable amount of randomness for break-evens
         let prioritized_score = adjusted_score * curr_template.priority;
 
-        if prioritized_score > curr_best_for_ai {
-            // Update frontrunners for each AI processed.
-            best_scoring_for_ai.insert(
-                ai, 
-                (prioritized_score, curr_template, msg.scored_context_index)
-            );
+        match prioritized_score > curr_best_for_ai.unwrap_or(types::MIN_CONSIDERATION_SCORE) {
+            false => {
+                bevy::log::debug!(
+                    "AI {:?} - Score for Action {:?} = {:?} is below the current best of {:?}. Ignoring.",
+                    &msg.entity,
+                    curr_template.name,
+                    prioritized_score,
+                    curr_best_for_ai,
+                );
+            },
+            true => {
+                bevy::log::debug!(
+                    "AI {:?} - Score for Action {:?} = {:?} beats the current best of {:?}. Promoting to new best.",
+                    &msg.entity,
+                    curr_template.name,
+                    prioritized_score,
+                    curr_best_for_ai,
+                );
 
-            // We need to be able to retrieve the actual best Context later for each AI, 
-            // so we'll store the index-to-Context map for any serious candidates here.
-            index_to_context_map.insert(
-                (ai, msg.scored_context_index), 
-                msg.scored_context
-            );
+                // Update frontrunners for each AI processed.
+                best_scoring_for_ai.insert(
+                    ai.entity(), 
+                    (prioritized_score, curr_template, msg.scored_context_index)
+                );
+
+                // We need to be able to retrieve the actual best Context later for each AI, 
+                // so we'll store the index-to-Context map for any serious candidates here.
+                index_to_context_map.insert(
+                    (ai.entity(), msg.scored_context_index), 
+                    msg.scored_context
+                );
+            }
         }
     }
 
@@ -401,7 +467,7 @@ pub fn ai_action_scoring_phase(
             &(ai, best_ctx_id)
         ).expect("Best-scoring ContextId is not mapped to a Context, somehow!");
 
-        bevy::log::debug!(
+        bevy::log::info!(
             "Picking Action {:?} w/ Score {:?} for AI {:?}...", 
             &best_template.name,
             &best_score,
@@ -409,7 +475,7 @@ pub fn ai_action_scoring_phase(
         );
 
         let pick_evt = crate::events::AiActionPicked {
-            entity: ai,
+            entity: ai.entity(),
             action_key: best_template.action_key.to_owned(),
             action_name: best_template.name.to_owned(),
             action_context: best_ctx.to_owned(),

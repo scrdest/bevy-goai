@@ -37,6 +37,12 @@ impl Borrow<str> for CurveIdentifier {
     }
 }
 
+impl Borrow<str> for &CurveIdentifier {
+    fn borrow(&self) -> &str {
+        self.0.borrow()
+    }
+}
+
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(transparent)]

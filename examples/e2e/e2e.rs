@@ -12,7 +12,7 @@ use bevy_goai::actionset::ActionSet;
 use bevy_goai::ai::AIController;
 use bevy_goai::arg_values::ContextValue;
 use bevy_goai::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use bevy_goai::considerations::{BatchedConsiderationRequest, ConsiderationResponse, ConsiderationData};
+use bevy_goai::considerations::{BatchedConsiderationRequest, ConsiderationData};
 use bevy_goai::decision_loop;
 use bevy_goai::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_goai::smart_object::{ActionSetStore, SmartObjects};
@@ -28,14 +28,6 @@ struct ExampleActionEvent{
 }
 
 impl ExampleActionEvent {
-    fn with_default_context(action_tracker: Entity) -> Self {
-        Self { 
-            entity: action_tracker,
-            ctx: Default::default(), 
-            state: ActionState::Running 
-        }
-    }
-
     fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
         Self {
             entity: action_tracker,
@@ -80,7 +72,7 @@ fn example_action_tracker_handler(
 
         match action_key.as_str() {
             "ExampleAction" => {
-                bevy::log::debug!("Triggering a ExampleActionEvent...");
+                bevy::log::info!("Triggering a ExampleActionEvent...");
                 commands.trigger(ExampleActionEvent::from_context(
                     tracker.0.action.context.clone(),
                     tracker_ent,
@@ -92,42 +84,29 @@ fn example_action_tracker_handler(
     }
 }
 
-// #[derive(Event)]
-// struct RunActionTrackerHandler;
-
-// fn example_action_tracker_handler_observerized(
-//     _trigger: On<RunActionTrackerHandler>,
-//     query: Query<(
-//         Entity, 
-//         &ActionTracker, 
-//         &mut ActionTrackerState, 
-//         Option<&mut ActionTrackerTickTimer>
-//     ), With<ActionTrackerTicks>>,
-//     game_timer: Res<Time>,
-//     real_timer: Res<Time<Real>>,
-//     commands: Commands,
-// ) {
-//     example_action_tracker_handler(query, game_timer, real_timer, commands);
-// }
-
 fn example_action(
     trigger: On<ExampleActionEvent>, 
-    mut commands: Commands,
+    associated_ai_qry: Query<(&ActionTracker, &ActionTrackerOwningAI)>,
+    mut tracker_state_qry: Query<(&ActionTracker, &mut ActionTrackerState)>,
 ) {
     let event = trigger.event();
     let tracker = event.entity;
-
-    let tracker_cmds = commands.get_entity(tracker);
+    let maybe_tracker_state = tracker_state_qry.get_mut(tracker);
+    let maybe_ai_owner = associated_ai_qry
+        .get(tracker)
+        .ok()
+        .map(|bundle| &bundle.1.owner_ai)
+    ;
 
     let state = &event.state;
     let maybe_ctx = Some(&event.ctx);
 
     let json_state = serde_json::ser::to_string(&state);
     let state_name = json_state.unwrap();
-    bevy::log::debug!("example_action: Current state is {}", state_name);
+    bevy::log::info!("example_action for AI {:?}: Current state is {}", maybe_ai_owner, state_name);
 
     let self_name: Option<&String> = maybe_ctx.map(|ctx| ctx.get("this").unwrap().try_into().unwrap());
-    bevy::log::debug!("example_action: Self name is {:?}", self_name);
+    bevy::log::debug!("example_action for AI {:?}: Self name is {:?}", maybe_ai_owner, self_name);
 
     let context_mapping = maybe_ctx.map(|ctx| ctx.get(&state_name)).flatten();
 
@@ -137,18 +116,18 @@ fn example_action(
             let clone_val = cv.clone();
             let cvstring: String = clone_val.try_into().unwrap();
             let unjsond = serde_json::de::from_str(&cvstring).unwrap();
-            bevy::log::debug!("example_action: Current unjsond is {:?}", unjsond);
+            bevy::log::debug!("example_action for AI {:?}: Current unjsond is {:?}", maybe_ai_owner, unjsond);
             unjsond
         }
     }.unwrap();
 
-    bevy::log::debug!("example_action: New state is {:?}", new);
+    bevy::log::info!("example_action for AI {:?}: New state is \"{:?}\"", maybe_ai_owner, new);
 
-    match tracker_cmds {
+    match maybe_tracker_state {
         Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
-        Ok(mut cmds) => { 
-            bevy::log::debug!("example_action: Updating the ActionTracker {:?} state to new value {:?}", tracker, new);
-            cmds.insert(ActionTrackerState(new)); 
+        Ok((upd_tracker, mut state)) => { 
+            bevy::log::debug!("example_action for AI {:?}: Updating the ActionTracker {:?} state to new value {:?}", maybe_ai_owner, upd_tracker, new);
+            state.0 = new;
         },
     }
 }
@@ -166,7 +145,6 @@ fn example_context_fetcher() -> Vec<crate::actions::ActionContext> {
 fn setup_example_entity(
     mut commands: Commands,
     mut actionset_store: ResMut<ActionSetStore>,
-    mut consideration_registry: ResMut<decision_loop::ConsiderationKeyToSystemIdMap>,
 ) {
     let example_actions = [
         ActionTemplate  {
@@ -174,8 +152,14 @@ fn setup_example_entity(
             context_fetcher_name: ContextFetcherIdentifier(EXAMPLE_CONTEXT_FETCHER_NAME.to_string()),
             considerations: Vec::from([
                 ConsiderationData::new(
-                    ConsiderationIdentifier::from("ALWAYS".to_string()),
+                    ConsiderationIdentifier::from("One".to_string()),
                     CurveIdentifier::from("Linear".to_string()),
+                    0.,
+                    1.5,
+                ),
+                ConsiderationData::new(
+                    ConsiderationIdentifier::from("Two".to_string()),
+                    CurveIdentifier::from("Square".to_string()),
                     0.,
                     1.,
                 )
@@ -191,10 +175,6 @@ fn setup_example_entity(
     };
 
     actionset_store.map_by_name.insert(example_actionset.name.to_owned(), example_actionset);
-    consideration_registry.mapping.insert(
-        ConsiderationIdentifier::from("ALWAYS".to_string()), 
-        commands.register_system(ex_cons_one)
-    );
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
@@ -211,10 +191,21 @@ fn setup_example_entity(
         entity: ai_id,  
         smart_objects: Some(new_sos),
     });
+}
 
-    // commands.trigger(RunContextFetcherSystem);
-    // commands.trigger(crate::decision_loop::TriggerAiActionScoringPhase);
-    // commands.trigger(RunActionTrackerHandler);
+fn setup_example_consideration_registration(
+    mut commands: Commands,
+    mut consideration_registry: ResMut<decision_loop::ConsiderationKeyToSystemIdMap>,
+) {
+    consideration_registry.mapping.insert(
+        ConsiderationIdentifier::from("One".to_string()), 
+        commands.register_system(example_consideration_one)
+    );
+
+    consideration_registry.mapping.insert(
+        ConsiderationIdentifier::from("Two".to_string()), 
+        commands.register_system(example_consideration_two)
+    );
 }
 
 fn setup_default_action_tracker_config(
@@ -250,50 +241,8 @@ fn example_context_fetcher_system(
         responses.write(ContextFetchResponse::new(
             req.action_template.to_owned(),
             context.to_owned(),
-            req.audience,
+            req.audience.to_owned(),
         ));
-    }
-}
-
-#[derive(EntityEvent)]
-struct SimpleConsiderationRequest {
-    entity: Entity,
-    scored_action_template: ActionTemplate,
-    scored_context: ActionContext,
-}
-
-/// A trivial Consideration implementation using Events. 
-/// Returns 1. (i.e. max score) for any inputs.
-fn simple_consideration_impl(
-    trigger: On<SimpleConsiderationRequest>,
-    mut writer: MessageWriter<ConsiderationResponse>,
-) {
-    let req = trigger.event();
-    writer.write(
-        ConsiderationResponse {
-            entity: req.entity,
-            scored_action_template: req.scored_action_template.to_owned(),
-            scored_context: req.scored_context.to_owned(),
-            score: 1.,
-        }
-    );
-}
-
-/// A simple mock Consideration dispatch to example stuff e2e
-fn example_consideration_runner(
-    mut reader: MessageReader<BatchedConsiderationRequest>,
-    mut commands: Commands,
-) {
-    for inp in reader.read() {
-        for _cons in inp.considerations.iter() {
-            // In a real scenario we'd match on the func_name in the Consideration
-            // and dispatch to different Events based on that.
-            commands.trigger(SimpleConsiderationRequest {
-                entity: inp.entity,
-                scored_action_template: inp.scored_action_template.to_owned(),
-                scored_context: inp.scored_context.to_owned(),
-            });
-        }
     }
 }
 
@@ -334,7 +283,7 @@ fn exit_on_finish_all_tasks(
     }
 }
 
-fn ex_cons_one(
+fn example_consideration_one(
     qry: Query<&ActionTrackerState>
 ) -> ActionScore {
     let mut good_cnt = 0;
@@ -356,6 +305,11 @@ fn ex_cons_one(
     }
 }
 
+/// Trivial Consideration, returns a flat value.
+fn example_consideration_two() -> ActionScore {
+    0.9
+}
+
 fn main() {
     let mut app = App::new();
 
@@ -373,26 +327,25 @@ fn main() {
     .init_resource::<UserDefaultActionTrackerSpawnConfig>()
     .init_resource::<ActionSetStore>()
     .init_resource::<DespawnedAnyActionTrackers>()
-    .init_resource::<BestScoringCandidateTracker>()
     .init_resource::<decision_loop::ConsiderationKeyToSystemIdMap>()
     .add_message::<ContextFetcherRequest>()
     .add_message::<ContextFetchResponse>()
     .add_message::<BatchedConsiderationRequest>()
-    .add_message::<ConsiderationResponse>()
     .register_function_with_name(EXAMPLE_CONTEXT_FETCHER_NAME, example_context_fetcher)
-    .add_systems(Startup, setup_example_entity)
-    .add_systems(Startup, setup_default_action_tracker_config)
+    .add_systems(Startup, (
+        setup_example_entity, 
+        setup_example_consideration_registration,
+        setup_default_action_tracker_config,
+    ))
     .add_observer(create_tracker_for_picked_action)
     .add_observer(actiontracker_spawn_requested)
     .add_observer(actiontracker_despawn_requested)
     .add_observer(decision_loop::ai_action_gather_phase)
-    .add_observer(simple_consideration_impl)
     .add_observer(example_action)
     .add_observer(mark_despawn_occurred)
     .add_systems(FixedUpdate, (
         example_context_fetcher_system,
         decision_loop::ai_action_prescoring_phase,
-        example_consideration_runner,
         decision_loop::ai_action_scoring_phase,
         example_action_tracker_handler,
     ).chain())

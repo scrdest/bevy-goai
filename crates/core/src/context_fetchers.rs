@@ -9,12 +9,12 @@ use crate::types;
 #[derive(Message, Debug)]
 pub struct ContextFetcherRequest {
     pub action_template: ActionTemplate,
-    pub audience: Entity, 
+    pub audience: types::EntityIdentifier, 
 }
 
 impl ContextFetcherRequest {
     pub fn new(
-        audience: Entity, 
+        audience: types::EntityIdentifier, 
         action_template: ActionTemplate,
     ) -> Self {
         Self {
@@ -35,14 +35,14 @@ pub struct ContextFetchResponse {
     /// The AI this was requested for; primarily so that we can split 
     /// the scoring process per each Audience, 
     /// even if the Messages for them wind up interleaved.
-    pub audience: Entity, 
+    pub audience: types::EntityIdentifier, 
 }
 
 impl ContextFetchResponse {
     pub fn new(
         action_template: ActionTemplate,
         contexts: types::ActionContextList,
-        audience: Entity,
+        audience: types::EntityIdentifier,
     ) -> Self {
         Self {
             action_template: action_template,
