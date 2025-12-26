@@ -188,7 +188,7 @@ fn consideration_adjustment(
 
 #[derive(Resource, Default)]
 pub struct ConsiderationKeyToSystemIdMap {
-    pub mapping: HashMap<ConsiderationIdentifier, SystemId::<(), ActionScore>>
+    pub mapping: HashMap<ConsiderationIdentifier, types::ConsiderationSignature>
 }
 
 /// 
@@ -320,7 +320,15 @@ pub fn ai_action_scoring_phase(
                     &cons.func_name
                 ),
                 Ok(system_id) => {
-                    let res = world.run_system(system_id);
+                    let res = world.run_system_with(
+                        system_id,
+                        (
+                            msg.entity.entity(),
+                            msg.entity.entity(),
+                            msg.scored_context.to_owned(),
+                        )
+                    );
+
                     if res.is_err() {
                         bevy::log::debug!(
                             "AI {:?} - Consideration '{:}' errored: {:?}", 

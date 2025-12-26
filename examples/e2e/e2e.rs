@@ -284,6 +284,7 @@ fn exit_on_finish_all_tasks(
 }
 
 fn example_consideration_one(
+    _inputs: types::ConsiderationInputs,
     qry: Query<&ActionTrackerState>
 ) -> ActionScore {
     let mut good_cnt = 0;
@@ -306,7 +307,9 @@ fn example_consideration_one(
 }
 
 /// Trivial Consideration, returns a flat value.
-fn example_consideration_two() -> ActionScore {
+fn example_consideration_two(
+    _inputs: types::ConsiderationInputs,
+) -> ActionScore {
     0.9
 }
 
