@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use bevy::prelude::*;
-use bevy::ecs::system::{SystemId, SystemState};
+use bevy::ecs::system::{SystemState};
 use crate::actions::{*};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
 use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds};
-use crate::curves::{SupportedUtilityCurve, UtilityCurve, resolve_curve_from_name};
+use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
 use crate::events::AiDecisionRequested;
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionScore};
@@ -199,7 +199,6 @@ pub fn ai_action_scoring_phase(
     )>
 ) {
     // bevy::log::debug!("Running ai_action_scoring_phase...");
-
     let messages: Vec<BatchedConsiderationRequest> = {
         let (
             mut request_reader, 
@@ -294,9 +293,11 @@ pub fn ai_action_scoring_phase(
         let mut consideration_count: usize = 0;
 
         for (cons_cnt, cons) in msg.considerations.iter().enumerate() {
-            let maybe_resolved_curve: Option<SupportedUtilityCurve> = resolve_curve_from_name(
-                &cons.curve_name
-            );
+            // We'll use the Registry resource if we have one and fall back to the hardcoded pool if we do not.
+            let maybe_resolved_curve: Option<SupportedUtilityCurve> = match world.get_resource::<UtilityCurveRegistry>() {
+                Some(curve_mapping) => curve_mapping.get_curve_by_name(&cons.curve_name),
+                None => resolve_curve_from_name(&cons.curve_name),
+            };
 
             if maybe_resolved_curve.is_none() {
                 bevy::log::warn!(
