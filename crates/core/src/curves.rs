@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use bevy::math::{self, curve::CurveExt};
+use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
 use crate::types::{ActionScore, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
 
 /// Curve functions suitable for Utility scoring purposes.
@@ -30,7 +30,7 @@ use crate::types::{ActionScore, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE
 /// by using the `UtilityCurve::sample_safe(&self, t)` method provided.
 /// 
 /// The datatype is also fixed to use whatever the ActionScore is implemented as.
-pub trait UtilityCurve: math::Curve<ActionScore> + Send + Sync {
+pub trait UtilityCurve: Curve<ActionScore> + Send + Sync {
     /// The interval over which this curve is parametrized.
     /// 
     /// This is the range of values of t where we can sample the curve and receive valid output.
@@ -40,8 +40,8 @@ pub trait UtilityCurve: math::Curve<ActionScore> + Send + Sync {
     /// If you see a conflicting value in impls - good, that means the trait was implemented 
     /// for something that shouldn't be a UtilityCurve and you spotted it before it became a
     /// major headache.
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     /// **IMPORTANT!** Use this method for sampling for Utility purposes.
@@ -51,7 +51,7 @@ pub trait UtilityCurve: math::Curve<ActionScore> + Send + Sync {
     /// 
     /// For Utility purposes, the output must be on the unit interval as well, or you will Cause Trouble.
     fn sample_safe(&self, t: ActionScore) -> ActionScore {
-        let clampin = math::curve::Interval::UNIT.clamp(t);
+        let clampin = Interval::UNIT.clamp(t);
         let raw = self.sample_unchecked(clampin);
         let clampout = raw.clamp(MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE);
         clampout
@@ -59,12 +59,27 @@ pub trait UtilityCurve: math::Curve<ActionScore> + Send + Sync {
 }
 
 pub trait UtilityCurveExt: UtilityCurve + Sized {
+    /// Creates a new Curve whose output is the average of the output of this Curve and the input Curve.
     fn average_with<O: UtilityCurve>(self, other: O) -> AverageCurve<Self, O> {
         AverageCurve::from((self, other))
     }
 
+    /// Creates a new, 'peaky' Curve by mirroring the shape around the halfway point. 
+    /// The domain of the resulting curve is still a unit interval. 
     fn halfway_mirror(self) -> HalfwayMirrorCurve<Self> {
         HalfwayMirrorCurve::from(self)
+    }
+
+    /// Creates a new Curve that has the same shape as this Curve, but squished above a provided 
+    /// 'floor' of Utility - e.g. `c.soft_leak(0.1)` will always output AT LEAST 0.1 Utility. 
+    fn soft_leak(self, gain: ActionScore) -> SoftLeak<Self> {
+        SoftLeak::new(self, gain)
+    }
+
+    /// Creates a new Curve that has the same shape as this Curve, but clipped above a provided 
+    /// 'floor' of Utility - e.g. `c.hard_leak(0.1)` will always output AT LEAST 0.1 Utility. 
+    fn hard_leak(self, gain: ActionScore) -> HardLeak<Self> {
+        HardLeak::new(self, gain)
     }
 }
 
@@ -83,7 +98,7 @@ impl UtilityConstantCurve {
     /// This constructor is fallible - it will return an error if the constant value 
     /// is outside of the range of values valid for a Utility Curve.
     pub fn new(value: ActionScore) -> Result<Self, ()> {
-        match math::curve::Interval::UNIT.contains(value) {
+        match Interval::UNIT.contains(value) {
             true => Ok(Self {val: value}),
             false => Err(())
         }
@@ -99,7 +114,7 @@ impl UtilityConstantCurve {
     /// Create a constant curve, which always produces the given value when sampled.
     /// Ensures that the constant value is valid by clamping it.
     pub fn new_clamped(value: ActionScore) -> Self {
-        Self { val: math::curve::Interval::UNIT.clamp(value) }
+        Self { val: Interval::UNIT.clamp(value) }
     }
 
     /// Create a constant curve, which always produces the given value when sampled.
@@ -126,9 +141,9 @@ impl UtilityConstantCurve {
     }
 }
 
-impl math::Curve<ActionScore> for UtilityConstantCurve {
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+impl Curve<ActionScore> for UtilityConstantCurve {
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     fn sample_unchecked(&self, _: f32) -> ActionScore {
@@ -159,8 +174,8 @@ impl UtilityBinaryCurve {
 }
 
 impl math::curve::Curve<ActionScore> for UtilityBinaryCurve {
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     fn sample_unchecked(&self, t: f32) -> ActionScore {
@@ -214,8 +229,8 @@ pub struct HalfwayMirrorCurve<C: UtilityCurve> {
     >
 }
 
-impl<C: UtilityCurve> math::Curve<ActionScore> for HalfwayMirrorCurve<C> {
-    fn domain(&self) -> math::curve::Interval {
+impl<C: UtilityCurve> Curve<ActionScore> for HalfwayMirrorCurve<C> {
+    fn domain(&self) -> Interval {
         self.wrapped_curve.domain()
     }
 
@@ -232,7 +247,7 @@ impl<C: UtilityCurve> HalfwayMirrorCurve<C> {
         let wrapped = curve
             .ping_pong()
             .map(|pingponged| 
-                pingponged.reparametrize_linear(math::curve::Interval::UNIT)
+                pingponged.reparametrize_linear(Interval::UNIT)
             )
         ;
 
@@ -281,8 +296,8 @@ impl<A: UtilityCurve, B: UtilityCurve> From<(A, B)> for AverageCurve<A, B> {
 }
 
 impl<A: UtilityCurve, B: UtilityCurve> math::curve::Curve<ActionScore> for AverageCurve<A, B> {
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     fn sample_unchecked(&self, t: f32) -> ActionScore {
@@ -291,6 +306,143 @@ impl<A: UtilityCurve, B: UtilityCurve> math::curve::Curve<ActionScore> for Avera
 }
 
 impl<A: UtilityCurve, B: UtilityCurve> UtilityCurve for AverageCurve<A, B> {}
+
+/// A transform that adds a constant amount of baseline Utility to the output of the wrapped Curve 
+/// and rescales the rest to maintain the max=1.0; i.e.: 
+/// 
+/// `l(f(x), g) = g + (1.0 - g) * f(x)`.
+/// 
+/// This creates a floor of minimum Utility (hence 'leak', it always lets a bit of the Action through), 
+/// while largely preserving the overall shape of the wrapped Curve (unlike HardLeak, which cuts it up).
+/// However, the larger the added floor, the more squished the Curve becomes, causing some loss of detail.
+/// 
+/// At `g >= 1.`, the curve becomes oversaturated and collapses into always outputting 1.0 for all inputs.
+/// 
+/// As an analogy, this is equivalent to a downwards Compressor w/ makeup gain in audio processing.
+/// 
+/// This can be handy for Considerations that should never *eliminate* a candidate Action, but which 
+/// still prefer the Context value to be in a certain range; e.g. SoftLeak(AtLeast(1.), 0.5) means 
+/// that values above Max get a Utility of 1.0, while those below get a Utility of 0.5.
+/// 
+/// Note that the constant value in this formula can also be **negative**, which turns this into a 
+/// Utility equivalent of an Expander instead. This sharpens continuous nonlinear wrapped Curves,
+/// making the low scores lower and high scores higher the lower the constant value is.
+/// 
+/// **NOTE**: This wrapper should be applied OVER the UtilityCurveSampler, not wrapped by it - i.e. 
+/// you SHOULD use SoftLeak<UtilityCurveSampler<C>>, and AVOID UtilityCurveSampler<SoftLeak<C>>. 
+/// This is important, as it may cause surprising outputs when the Sampler runs in Inverse mode!
+#[derive(Clone)]
+pub struct SoftLeak<C: UtilityCurve> {
+    curve: C,
+    gain: ActionScore,
+}
+
+impl<C: UtilityCurve> SoftLeak<C> {
+    pub fn new(curve: C, gain: ActionScore) -> Self {
+        Self {
+            curve: curve,
+            gain: gain,
+        }
+    }
+
+    pub const fn new_const_compressor<const GAIN: u8>(curve: C) -> Self {
+        let gain = (GAIN as f32) / (u8::MAX as f32);
+        Self {
+            curve: curve,
+            gain: gain,
+        }
+    }
+
+    pub const fn new_const_expander<const GAIN: u8>(curve: C) -> Self {
+        let gain = (GAIN as f32) / (u8::MAX as f32);
+        Self {
+            curve: curve,
+            gain: -gain,
+        }
+    }
+}
+
+impl<C: UtilityCurve> Curve<ActionScore> for SoftLeak<C> {
+    fn domain(&self) -> Interval {
+        Interval::UNIT
+    }
+
+    fn sample_unchecked(&self, t: f32) -> ActionScore {
+        self.gain + (1. - self.gain) * self.curve.sample_unchecked(t)
+    }
+}
+
+impl<C: UtilityCurve> UtilityCurve for SoftLeak<C> {}
+
+/// A transform that adds a constant amount of baseline Utility to the output of the wrapped Curve 
+/// and rescales the rest to maintain the max=1.0; i.e.: 
+/// 
+/// `l(f(x), g) = (g + f(x)).clamp(0., 1.)`.
+/// 
+/// This creates a floor of minimum Utility (hence 'leak', it always lets a bit of the Action through), 
+/// and shifts the Curve, leaving its derivatives unmolested (unlike SoftLeak). Instead, it flattens 
+/// any parts of the shape above the maximum value, which may distort the overall shape at the maxima.
+/// 
+/// At `g >= 1.`, the curve becomes oversaturated and collapses into always outputting 1.0 for all inputs.
+/// 
+/// As an analogy, this is equivalent to Distortion (hard-clip overdrive) in audio processing.
+/// 
+/// This can be handy for Considerations that should never *eliminate* a candidate Action, but which 
+/// still prefer the Context value to be in a certain range; e.g. HardLeak(AtLeast(1.), 0.5) means 
+/// that values above Max get a Utility of 1.0, while those below get a Utility of 0.5.
+/// 
+/// Note that the constant value in this formula can also be **negative**, which instead acts as a 
+/// simple *subtraction* (saturating at zero Utility) - e.g. HardLeak(AtLeast(1.), -0.5) would instead 
+/// mean that values above Max get Utility of 0.5, while everything else gets zero.
+/// 
+/// **NOTE**: This wrapper should be applied OVER the UtilityCurveSampler, not wrapped by it - i.e. 
+/// you SHOULD use HardLeak<UtilityCurveSampler<C>>, and AVOID UtilityCurveSampler<HardLeak<C>>. 
+/// This is important, as it may cause surprising outputs when the Sampler runs in Inverse mode!
+#[derive(Clone)]
+pub struct HardLeak<C: UtilityCurve> {
+    curve: C,
+    gain: ActionScore,
+}
+
+impl<C: UtilityCurve> HardLeak<C> {
+    pub fn new(curve: C, gain: ActionScore) -> Self {
+        Self {
+            curve: curve,
+            gain: gain,
+        }
+    }
+
+    pub const fn new_const_distortion<const GAIN: u8>(curve: C) -> Self {
+        let gain = (GAIN as f32) / (u8::MAX as f32);
+        Self {
+            curve: curve,
+            gain: gain,
+        }
+    }
+
+    pub const fn new_const_subtraction<const GAIN: u8>(curve: C) -> Self {
+        let gain = (GAIN as f32) / (u8::MAX as f32);
+        Self {
+            curve: curve,
+            gain: -gain,
+        }
+    }
+}
+
+impl<C: UtilityCurve> Curve<ActionScore> for HardLeak<C> {
+    fn domain(&self) -> Interval {
+        Interval::UNIT
+    }
+
+    fn sample_unchecked(&self, t: f32) -> ActionScore {
+        (self.gain + self.curve.sample_unchecked(t)).clamp(
+            crate::types::MIN_CONSIDERATION_SCORE, 
+            crate::types::MAX_CONSIDERATION_SCORE, 
+        )
+    }
+}
+
+impl<C: UtilityCurve> UtilityCurve for HardLeak<C> {}
 
 // Handy common const-valued curves:
 //
@@ -397,9 +549,9 @@ impl<U: UtilityCurve> UtilityCurveSampler<U> {
     }
 }
 
-impl<U: UtilityCurve> math::Curve<ActionScore> for UtilityCurveSampler<U> {
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+impl<U: UtilityCurve> Curve<ActionScore> for UtilityCurveSampler<U> {
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     fn sample_unchecked(&self, t: f32) -> ActionScore {
@@ -530,6 +682,28 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** Recommended first option until it becomes clear that you need bigger guns for the job.
     AntiLinear(UtilityCurveSampler<math::curve::LinearCurve>),
+
+    /// A monotonically increasing 'high-pass' Curve where t<=min returns 0.25, 
+    /// t>=max returns 1.0, and every value in between is LERPed. 
+    /// 
+    /// Basically just Linear with a 25% SoftLeak.
+    /// 
+    /// **COST:** Cheap to calculate.
+    /// 
+    /// **USAGE:** When you'd use Linear, but the Min/Max values are more guidelines than hard requirements. 
+    /// You're still kinda okay running with values outside of that range, but would prefer not to.
+    Linear25pSoftLeak(SoftLeak<UtilityCurveSampler<math::curve::LinearCurve>>),
+
+    /// A monotonically *decreasing* 'low-pass' Curve where t<=min returns 1.0, 
+    /// t>=max returns 0.25, and every value in between is LERPed. 
+    /// 
+    /// Basically just AntiLinear with a 25% SoftLeak.
+    /// 
+    /// **COST:** Cheap to calculate.
+    /// 
+    /// **USAGE:** When you'd use AntiLinear, but the Min/Max values are more guidelines than hard requirements.
+    /// You're still kinda okay running with values outside of that range, but would prefer not to.
+    AntiLinear25pSoftLeak(SoftLeak<UtilityCurveSampler<math::curve::LinearCurve>>),
 
     /// A monotonically increasing 'high-pass' Curve similar to Linear, except uses input-squared. 
     /// 
@@ -669,9 +843,36 @@ pub enum SupportedUtilityCurve {
     Custom(std::sync::Arc<dyn UtilityCurve>)
 }
 
-impl math::Curve<ActionScore> for SupportedUtilityCurve {
-    fn domain(&self) -> math::curve::Interval {
-        math::curve::Interval::UNIT
+impl std::fmt::Debug for SupportedUtilityCurve {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConstZero(_) => f.debug_tuple("ConstZero").finish(),
+            Self::ConstMax(_) => f.debug_tuple("ConstMax").finish(),
+            Self::ConstHalf(_) => f.debug_tuple("ConstHalf").finish(),
+            Self::AtLeast(_) => f.debug_tuple("AtLeast").finish(),
+            Self::LessThan(_) => f.debug_tuple("LessThan").finish(),
+            Self::Equals(_) => f.debug_tuple("Equals").finish(),
+            Self::NotEquals(_) => f.debug_tuple("NotEquals").finish(),
+            Self::Linear(_) => f.debug_tuple("Linear").finish(),
+            Self::AntiLinear(_) => f.debug_tuple("AntiLinear").finish(),
+            Self::Linear25pSoftLeak(_) => f.debug_tuple("Linear25%SoftLeak").finish(),
+            Self::AntiLinear25pSoftLeak(_) => f.debug_tuple("AntiLinear25%SoftLeak").finish(),
+            Self::Square(_) => f.debug_tuple("Square").finish(),
+            Self::AntiSquare(_) => f.debug_tuple("AntiSquare").finish(),
+            Self::ExponentialIn(_) => f.debug_tuple("ExponentialIn").finish(),
+            Self::AntiExponentialIn(_) => f.debug_tuple("AntiExponentialIn").finish(),
+            Self::Triangle(_) => f.debug_tuple("Triangle").finish(),
+            Self::AntiTriangle(_) => f.debug_tuple("AntiTriangle").finish(),
+            Self::QuadraticQuasiGauss(_) => f.debug_tuple("QuadraticQuasiGauss").finish(),
+            Self::AntiQuadraticQuasiGauss(_) => f.debug_tuple("AntiQuadraticQuasiGauss").finish(),
+            Self::Custom(_) => f.debug_tuple("Custom").finish(),
+        }
+    }
+}
+
+impl Curve<ActionScore> for SupportedUtilityCurve {
+    fn domain(&self) -> Interval {
+        Interval::UNIT
     }
 
     fn sample_unchecked(&self, t: f32) -> ActionScore {
@@ -685,6 +886,8 @@ impl math::Curve<ActionScore> for SupportedUtilityCurve {
             Self::NotEquals(c) => c.sample_unchecked(t),
             Self::Linear(c) => c.sample_unchecked(t),
             Self::AntiLinear(c) => c.sample_unchecked(t),
+            Self::Linear25pSoftLeak(c) => c.sample_unchecked(t),
+            Self::AntiLinear25pSoftLeak(c) => c.sample_unchecked(t),
             Self::Square(c) => c.sample_unchecked(t),
             Self::AntiSquare(c) => c.sample_unchecked(t),
             Self::ExponentialIn(c) => c.sample_unchecked(t),
@@ -737,6 +940,12 @@ pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Op
         )),
         "Linear" => Some(SupportedUtilityCurve::Linear(CURVE_LINEAR)),
         "AntiLinear" => Some(SupportedUtilityCurve::AntiLinear(CURVE_ANTILINEAR)),
+        "Linear25%SoftLeak" => Some(SupportedUtilityCurve::Linear25pSoftLeak(
+            UtilityCurveSampler::new_forward(math::curve::LinearCurve {}).soft_leak(0.25)
+        )),
+        "AntiLinear25%SoftLeak" => Some(SupportedUtilityCurve::AntiLinear25pSoftLeak(
+            UtilityCurveSampler::new_inverse(math::curve::LinearCurve {}).soft_leak(0.25)
+        )),
         "Square" => Some(SupportedUtilityCurve::Square(CURVE_SQUARE)),
         "AntiSquare" => Some(SupportedUtilityCurve::AntiSquare(CURVE_ANTISQUARE)),
         "ExponentialIn" => Some(SupportedUtilityCurve::ExponentialIn(CURVE_EXPONENTIAL)),
@@ -757,7 +966,7 @@ pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Op
     }
 }
 
-/// 
+/// A map that lets us request Utility Curves by a string key and register new entries for custom Curves. 
 #[derive(bevy::prelude::Resource, Clone)]
 pub struct UtilityCurveRegistry {
     mapping: std::collections::HashMap<String, SupportedUtilityCurve>

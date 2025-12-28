@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::rc::Rc;
 use bevy::prelude::*;
@@ -6,6 +7,7 @@ use crate::actions::{*};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
 use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds};
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
+use crate::errors::NoCurveMatchStrategyConfig;
 use crate::events::AiDecisionRequested;
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionScore};
@@ -294,25 +296,71 @@ pub fn ai_action_scoring_phase(
 
         for (cons_cnt, cons) in msg.considerations.iter().enumerate() {
             // We'll use the Registry resource if we have one and fall back to the hardcoded pool if we do not.
-            let maybe_resolved_curve: Option<SupportedUtilityCurve> = match world.get_resource::<UtilityCurveRegistry>() {
+            let mut maybe_resolved_curve: Option<SupportedUtilityCurve> = match world.get_resource::<UtilityCurveRegistry>() {
                 Some(curve_mapping) => curve_mapping.get_curve_by_name(&cons.curve_name),
                 None => resolve_curve_from_name(&cons.curve_name),
             };
 
             if maybe_resolved_curve.is_none() {
-                bevy::log::warn!(
-                    "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve!", 
-                    &msg.entity,
-                    &cons.curve_name
-                );
+                let default_strategy = NoCurveMatchStrategyConfig::default();
+
+                let curve_miss_strategy = world
+                    .get_resource::<crate::errors::NoCurveMatchStrategyConfig>()
+                    .unwrap_or(&default_strategy)
+                ;
+
+                match &curve_miss_strategy.0 {
+                    crate::errors::NoCurveMatchStrategy::Panic => {
+                        bevy::log::warn!(
+                            "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, panicking!", 
+                            &msg.entity,
+                            &cons.curve_name
+                        );
+                        panic!("Failed to resolve Curve key to a SupportedUtilityCurve!");
+                    },
+
+                    crate::errors::NoCurveMatchStrategy::SkipConsiderationWithLog => {
+                        bevy::log::warn!(
+                            "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
+                            &msg.entity,
+                            &cons.curve_name,
+                            &cons.func_name,
+                        );
+                        continue;
+                    },
+
+                    crate::errors::NoCurveMatchStrategy::SkipActionWithLog => {
+                        bevy::log::warn!(
+                            "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping ActionTemplate {:?}!", 
+                            &msg.entity,
+                            &cons.curve_name,
+                            &curr_template.name,
+                        );
+                        break;
+                    },
+
+                    crate::errors::NoCurveMatchStrategy::DefaultCurveWithLog(curve_resolver) => {
+                        let resolved = curve_resolver(cons.curve_name.borrow());
+                        
+                        bevy::log::warn!(
+                            "AI {:?} - Curve key {:?} resolved using fallback Curve {:?}", 
+                            &msg.entity,
+                            &cons.curve_name,
+                            &resolved,
+                        );
+
+                        maybe_resolved_curve = Some(resolved)
+                    },
+
+                    crate::errors::NoCurveMatchStrategy::DefaultCurveWithoutLog(curve_resolver) => {
+                        let resolved = curve_resolver(cons.curve_name.borrow());
+                        maybe_resolved_curve = Some(resolved)
+                    },
+                }
             }
 
-            // TODO: This currently panics to stop the AIs from inadvertently triggering some possibly 
-            //       Very Bad Actions on the user side. We could just skip the whole thing, but that 
-            //       seems like confusing, implicit behavior. Might give users a way to opt into more 
-            //       graceful fallback handling later (e.g. use a ConstZero curve, or Linear, or w/e).
-            let resolved_curve = maybe_resolved_curve
-                .expect("Failed to resolve a Curve key to a supported Utility Curve");
+            // We can safely unwrap this as any handling/panicking has been done earlier.
+            let resolved_curve = maybe_resolved_curve.unwrap();
 
             match cons.consideration_systemid {
                 Err(_) => bevy::log::debug!(
