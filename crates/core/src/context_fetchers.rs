@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use bevy::prelude::*;
 use crate::actions::*;
 use crate::types;
@@ -8,14 +9,14 @@ use crate::types;
 /// their custom logic to handle them on a case-by-case basis..
 #[derive(Message, Debug)]
 pub struct ContextFetcherRequest {
-    pub action_template: ActionTemplate,
+    pub action_template: Arc<ActionTemplate>,
     pub audience: types::EntityIdentifier, 
 }
 
 impl ContextFetcherRequest {
     pub fn new(
         audience: types::EntityIdentifier, 
-        action_template: ActionTemplate,
+        action_template: Arc<ActionTemplate>,
     ) -> Self {
         Self {
             action_template: action_template,
@@ -30,7 +31,7 @@ pub struct ContextFetchResponse {
     pub contexts: types::ActionContextList, 
     
     /// The ActionTemplate this request came for (mainly to tie it back together as an Action)
-    pub action_template: ActionTemplate, 
+    pub action_template: Arc<ActionTemplate>, 
 
     /// The AI this was requested for; primarily so that we can split 
     /// the scoring process per each Audience, 
@@ -40,7 +41,7 @@ pub struct ContextFetchResponse {
 
 impl ContextFetchResponse {
     pub fn new(
-        action_template: ActionTemplate,
+        action_template: Arc<ActionTemplate>,
         contexts: types::ActionContextList,
         audience: types::EntityIdentifier,
     ) -> Self {

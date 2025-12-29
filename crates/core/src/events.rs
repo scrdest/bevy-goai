@@ -26,7 +26,7 @@ pub struct AiActionPicked {
     pub action_name: String,
 
     /// The Context of the Action, i.e. the static input(s) we scored against.
-    pub action_context: ActionContext,
+    pub action_context: crate::types::ActionContextRef,
 
     /// The Utility score; this is so that we can decide whether to possibly 
     /// override this with a higher-priority Action later on.
@@ -49,11 +49,13 @@ impl AiActionPicked {
             action_name
         );
 
+        let wrapped_ctx = std::sync::Arc::new(action_context);
+
         Self {
             entity: ai_owner,
             action_key: action_key,
             action_name: action_name,
-            action_context: action_context,
+            action_context: wrapped_ctx,
             action_score: action_score,
         }
     }
@@ -94,6 +96,8 @@ mod tests {
         let mut ctx2 = ActionContext::new();
         ctx2.insert("foo".into(), 1.into());
         ctx2.insert("bar".into(), 2.into());
+
+        let ctx2 = std::sync::Arc::new(ctx2);
 
         commands.trigger(AiActionPicked {
             action_name: "TestAction".into(),

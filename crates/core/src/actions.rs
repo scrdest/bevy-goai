@@ -33,7 +33,7 @@ use serde::{Serialize, Deserialize};
 
 use crate::arg_values::ContextValue;
 use crate::considerations::ConsiderationData;
-use crate::types;
+use crate::types::{self, ActionContextRef};
 use crate::utility_concepts::{ContextFetcherIdentifier};
 
 pub type ActionContext = HashMap<String, ContextValue>;
@@ -42,7 +42,7 @@ pub type ActionContext = HashMap<String, ContextValue>;
 #[derive(Clone, Reflect, Debug)]
 pub struct Action {
     pub name: String,
-    pub context: ActionContext,
+    pub context: ActionContextRef,
     pub action_key: String,
 }
 

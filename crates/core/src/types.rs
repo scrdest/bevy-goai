@@ -1,5 +1,7 @@
 //! Type aliases and 'abstracting' newtypes.
 
+use std::sync::Arc;
+
 /// 
 pub type ContextFetcherKey = crate::utility_concepts::ContextFetcherIdentifier;
 
@@ -13,8 +15,11 @@ pub const MIN_CONSIDERATION_SCORE: ActionScore = 0.;
 pub const MAX_CONSIDERATION_SCORE: ActionScore = 1.;
 
 pub type ActionTemplate = crate::actions::ActionTemplate;
+pub type ActionTemplateRef = Arc<ActionTemplate>;
+
 pub type ActionContext = crate::actions::ActionContext;
-pub type ActionContextList = Vec<ActionContext>;
+pub type ActionContextRef = Arc<ActionContext>;
+pub type ActionContextList = Vec<ActionContextRef>;
 
 // Type aliases - to express intent better.
 pub type AiEntity = bevy::prelude::Entity;
@@ -44,7 +49,7 @@ pub type PawnEntity = bevy::prelude::Entity;
 pub type ConsiderationInputs = bevy::prelude::In<(
     AiEntity, 
     PawnEntity,
-    ActionContext, 
+    Arc<ActionContext>, 
 )>;
 
 /// A general interface for any Consideration.

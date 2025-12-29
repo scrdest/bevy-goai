@@ -1,11 +1,11 @@
 use bevy_goai::*;
-use goai_core::types::ActionScore;
+use goai_core::types::{ActionContextRef, ActionScore};
 
 use std::collections::HashMap;
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use serde_json;
-use bevy_goai::actions::{ActionTemplate, ActionContext};
+use bevy_goai::actions::{ActionTemplate};
 use bevy_goai::action_runtime::*;
 use bevy_goai::action_state::ActionState;
 use bevy_goai::actionset::ActionSet;
@@ -23,12 +23,21 @@ const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "ExampleCF";
 struct ExampleActionEvent{
     /// NOTE: entity is expected to be an ActionTracker here.
     entity: Entity, 
-    ctx: ActionContext,
+    ctx: ActionContextRef,
     state: ActionState,
 }
 
 impl ExampleActionEvent {
-    fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
+    // fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
+    //     let wrapped_ctx = std::sync::Arc::new(context);
+    //     Self {
+    //         entity: action_tracker,
+    //         ctx: wrapped_ctx,
+    //         state: state.unwrap_or(ActionState::Ready),
+    //     }
+    // }
+
+    fn from_context_ref(context: ActionContextRef, action_tracker: Entity, state: Option<ActionState>) -> Self {
         Self {
             entity: action_tracker,
             ctx: context,
@@ -73,7 +82,7 @@ fn example_action_tracker_handler(
         match action_key.as_str() {
             "ExampleAction" => {
                 bevy::log::info!("Triggering a ExampleActionEvent...");
-                commands.trigger(ExampleActionEvent::from_context(
+                commands.trigger(ExampleActionEvent::from_context_ref(
                     tracker.0.action.context.clone(),
                     tracker_ent,
                     Some(state.0),
@@ -235,6 +244,7 @@ fn example_context_fetcher_system(
     context.insert("\"Failed\"".to_string(), "\"Failed\"".to_string().into());
     context.insert("this".to_string(), EXAMPLE_CONTEXT_FETCHER_NAME.to_string().into());
 
+    let context = std::sync::Arc::new(context);
     let context = Vec::from([context]);
     
     for req in requests.read() {

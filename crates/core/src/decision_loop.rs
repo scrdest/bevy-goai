@@ -1,9 +1,7 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::rc::Rc;
 use bevy::prelude::*;
 use bevy::ecs::system::{SystemState};
-use crate::actions::{*};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
 use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds};
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
@@ -11,7 +9,7 @@ use crate::errors::NoCurveMatchStrategyConfig;
 use crate::events::AiDecisionRequested;
 use crate::lods::{AiLevelOfDetail};
 use crate::smart_object::ActionSetStore;
-use crate::types::{self, ActionScore};
+use crate::types::{self, ActionContextRef, ActionScore, ActionTemplateRef};
 use crate::utility_concepts::{ConsiderationIdentifier};
 
 
@@ -71,7 +69,10 @@ pub fn ai_action_gather_phase(
             }
         )
         .flat_map(|acts| {
-            acts.actions.to_vec()
+            acts.actions.iter()
+            .cloned()
+            .map(|act| std::sync::Arc::new(act))
+            .collect::<Vec<types::ActionTemplateRef>>()
         });
 
         bevy::log::debug!("ai_action_gather_phase: Available actions for {:?} are: {:#?}", entity, smartobjects.actionset_refs);
@@ -137,7 +138,7 @@ pub fn ai_action_prescoring_phase(
         let considerations = &action_template.considerations;
         let contexts = &msg.contexts;
 
-        for (ctx_idx, ctx) in contexts.iter().enumerate() {
+        for ctx in contexts.iter() {
             bevy::log::debug!("ai_action_prescoring_phase: Scoring context for template {:?}: {:#?}", action_template.name, ctx);
 
             let system_ids = considerations.iter().map(|con| {
@@ -160,10 +161,9 @@ pub fn ai_action_prescoring_phase(
                 entity: audience.clone(),
                 scored_action_template: action_template.to_owned(),
                 scored_context: ctx.to_owned(),
-                scored_context_index: (msg_id.id, ctx_idx),
                 considerations: system_ids.collect(),
             };
-            
+
             request_writer.write(request_batch);
         }
     }
@@ -258,30 +258,22 @@ pub fn ai_action_scoring_phase(
     let mut best_scoring_for_ai = HashMap::<
         Entity, (
             ActionScore, 
-            Rc<ActionTemplate>, 
-            (usize, usize)
+            ActionTemplateRef, 
+            ActionContextRef,
         )
     >::new();
 
     // Best score reached for this ActionTemplate
     // This is a bit more 'local' than the per-AI score
     let mut best_scoring_template = HashMap::<
-        (Entity, Rc<ActionTemplate>), 
+        (Entity, ActionTemplateRef), 
         ActionScore
     >::new();
-
-    let mut index_to_context_map = HashMap::<
-        (Entity, (usize, usize)), 
-        ActionContext
-    >::new();
-
-    // We use Rc<T> to avoid cloning data for the HashMaps
-    let mut at_rc_pool: HashMap<String, Rc<ActionTemplate>> = HashMap::new();
 
     for msg in messages {
         bevy::log::debug!("AI {:?} - ai_action_scoring_phase: processing Ctx {:?} for Action {:?}", 
             &msg.entity,
-            &msg.scored_context_index, 
+            &msg.scored_context, 
             &msg.scored_action_template.name,
         );
         let ai = &msg.entity;
@@ -308,26 +300,7 @@ pub fn ai_action_scoring_phase(
                 continue;
             }
         }
-        
-        let maybe_curr_template = at_rc_pool
-            .get(&msg.scored_action_template.name)
-            .cloned()
-            ;
-
-        let mut was_empty = false;
-        let curr_template = maybe_curr_template.unwrap_or_else(
-            || {
-                was_empty = true; 
-                Rc::new(msg.scored_action_template)
-            }
-        );
-        
-        if was_empty {
-            at_rc_pool.insert((
-                &curr_template.name).to_owned(), 
-                curr_template.clone()
-            );
-        }
+        let curr_template = msg.scored_action_template.clone();
         
         let best_score_for_template = best_scoring_template
             .get(&(ai.entity(), curr_template.clone()))
@@ -543,14 +516,7 @@ pub fn ai_action_scoring_phase(
                 // Update frontrunners for each AI processed.
                 best_scoring_for_ai.insert(
                     ai.entity(), 
-                    (prioritized_score, curr_template, msg.scored_context_index)
-                );
-
-                // We need to be able to retrieve the actual best Context later for each AI, 
-                // so we'll store the index-to-Context map for any serious candidates here.
-                index_to_context_map.insert(
-                    (ai.entity(), msg.scored_context_index), 
-                    msg.scored_context
+                    (prioritized_score, curr_template, msg.scored_context)
                 );
             }
         }
@@ -560,13 +526,9 @@ pub fn ai_action_scoring_phase(
         ai, (
             best_score, 
             best_template, 
-            best_ctx_id
+            best_ctx
         )
     ) in best_scoring_for_ai {
-        let best_ctx = index_to_context_map.get(
-            &(ai, best_ctx_id)
-        ).expect("Best-scoring ContextId is not mapped to a Context, somehow!");
-
         bevy::log::info!(
             "Picking Action {:?} w/ Score {:?} for AI {:?}...", 
             &best_template.name,
