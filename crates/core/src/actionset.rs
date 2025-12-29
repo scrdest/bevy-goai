@@ -13,7 +13,7 @@ pub struct ActionSet {
 
 // Asset loader
 #[derive(Default)]
-struct ActionSetLoader;
+pub struct ActionSetLoader;
 
 impl AssetLoader for ActionSetLoader {
     type Asset = ActionSet;
@@ -26,12 +26,12 @@ impl AssetLoader for ActionSetLoader {
         _settings: &Self::Settings, 
         _ctx: &mut LoadContext<'_>
     ) -> Result<Self::Asset, Self::Error> {
-        println!("ActionSetLoader running...");
+        bevy::log::debug!("ActionSetLoader running...");
         let mut bytes = Vec::new();
         let _ = reader.read_to_end(&mut bytes).await;
         let read= serde_json::from_slice(&bytes);
         let res = read.map_err(|err| {println!("ActionSetLoader error: {:?}", err); err.into()} );
-        println!("ActionSetLoader finished...");
+        bevy::log::debug!("ActionSetLoader finished...");
         res
     }
 }

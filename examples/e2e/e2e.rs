@@ -127,7 +127,7 @@ fn example_action(
         Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
         Ok((upd_tracker, mut state)) => { 
             bevy::log::debug!("example_action for AI {:?}: Updating the ActionTracker {:?} state to new value {:?}", maybe_ai_owner, upd_tracker, new);
-            state.0 = new;
+            state.set_state(new);
         },
     }
 }
@@ -166,6 +166,8 @@ fn setup_example_entity(
             ]),
             priority: 1.,
             action_key: "ExampleAction".to_string(),
+            lod_min: None, 
+            lod_max: None,
         }
     ];
 
@@ -291,7 +293,7 @@ fn example_consideration_one(
     let mut bad_cnt = 0;
 
     for tracker in qry {
-        match tracker.0 {
+        match tracker.get_state() {
             ActionState::Failed => { bad_cnt += 1 },
             _ => { good_cnt += 1 },
         }

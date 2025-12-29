@@ -1,4 +1,30 @@
-//! Actions
+//! Actions and ActionTemplates.
+//! 
+//! An Action is the ultimate output of the AI engine - it is largely what it sounds like, 
+//! a generic behavior of some sort, for example moving, attacking, using items, etc., 
+//! possibly taking multiple ticks to conclude (as opposed to a one-off trigger only).
+//! 
+//! The first caveat is that Actions are independent of their implementation - AI code cares 
+//! not about how you implement your movement or combat systems, an Action is merely a request 
+//! to run some code that will implement it properly (with hooks to signal when it's done running).
+//! 
+//! The second caveat is that we are not necessarily only talking about individual NPCs!
+//!  
+//! A single AI can be the 'brain' of a single NPC, but we can also have 'Commander' AIs 
+//! driving whole teams or crowds, 'Director' AIs whose target (Pawn) is 'the game world'
+//! (e.g. running spawners, or coordinating other AIs goals to drive story progression), 
+//! and conversely, a single NPC or Faction can be run by multiple AIs working together.
+//! 
+//! An Action is composed of two parts: an ActionTemplate and an ActionContext. 
+//! 
+//! You can think of that as 'function' and 'parameters', more or less - the 
+//! Template represents a capability, e.g. the ability to pick up items, while the 
+//! Context represents what we're doing it *to* (e.g. which item to pick up). 
+//! 
+//! An Action will usually have multiple possible available Contexts to choose from. 
+//! 
+//! This is the core problem AI solves - given all ActionTemplates and all Contexts 
+//! available for them at a given moment, which combination to choose for execution?
 use std::collections::HashMap;
 
 use bevy::prelude::*;
@@ -12,11 +38,9 @@ use crate::utility_concepts::{ContextFetcherIdentifier};
 
 pub type ActionContext = HashMap<String, ContextValue>;
 
+/// An Action is effectively an ActionTemplate + a selected ActionContext. 
 #[derive(Clone, Reflect, Debug)]
 pub struct Action {
-    /// A GOAI action is effectively an ActionTemplate + a selected Context. 
-    /// 
-    // pub(crate) func: TypeRegistryFuncIdentifier,
     pub name: String,
     pub context: ActionContext,
     pub action_key: String,
@@ -30,29 +54,47 @@ pub struct ScoredAction {
 }
 
 
+/// An ActionTemplate is a 'partial' Action (in the sense of a partial function).
+/// It represents an abstract activity an AI may undertake without a specific target.
+/// 
+/// For example, OpenDoor is an ActionTemplate - it becomes an Action when we specify 
+/// WHICH door to open, which we'll refer to by the quasi-generic syntax `OpenDoor<SomeDoor>`. 
+/// 
+/// The square-bracketed value(s) are what the library calls an ActionContext.
+/// 
+/// In total, an ActionTemplate is: 
+/// 1) a String key identifying the Action executor e.g. 'OpenDoorHandler'.
+/// 2) a String key identifying a System that returns possible Contexts (e.g. 'GetAdjacentDoors').
+/// 3) a sequence of Consideration System String keys that will be used to score all of these (e.g. ['DistanceToPawn']).
+/// 4) a Priority multiplier for the final score to make certain activities intrinsically higher priority (e.g. 1.5).
 #[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
 pub struct ActionTemplate {
-    /// An ActionTemplate is a 'partial' Action (in the sense of a partial function).
-    /// It represents an abstract activity an AI may undertake without a specific target.
-    /// 
-    /// For example, OpenDoor is an ActionTemplate - it becomes an Action when we specify WHICH door to open,
-    /// which we'll refer to by the quasi-generic-esque syntax OpenDoor<SomeDoor>. 
-    /// The square-bracketed value(s) are what GOAI (following IAUS) calls a Context.
-    /// 
-    /// In total, an ActionTemplate is: 
-    /// 1) a ref to a function we will run as the Action (e.g. open_door_handler()).
-    /// 2) a ref to a function that returns possible Contexts (e.g. get_adjacent_doors()).
-    /// 3) a sequence of refs to functions that will score all of these (e.g. [distance_to_pawn()]).
-    /// 4) a multiplier for the final score to make certain activities intrinsically higher priority (e.g. 1.5).
     // 
     // name = identifier. Two ActionTemplates may share the same function (as an implementation detail), 
     //                    but represent very different logical activities. This helps AI designers not go mad.
+
+    /// Human-readable identifier of the Action; as a general rule, should be 
     pub name: String, 
+
+    /// 
     #[serde(rename="context_fetcher")]
     pub context_fetcher_name: ContextFetcherIdentifier,
     pub considerations: Vec<ConsiderationData>,
     pub priority: types::ActionScore,
     pub action_key: String,
+    // AI LODs: 
+    pub lod_min: Option<types::AiLodLevelPrimitive>,
+    pub lod_max: Option<types::AiLodLevelPrimitive>,
+}
+
+impl ActionTemplate {
+    /// Checks if this template should be processed at a given LOD.
+    pub fn is_within_lod_range(&self, lod: &Option<crate::lods::AiLevelOfDetailValue>) -> bool {
+        let qry_lod = lod.map(|lv| lv.to_primitive()).unwrap_or(crate::lods::LOD_NORMAL);
+        let min = self.lod_min.unwrap_or(crate::lods::LOD_NORMAL);
+        let max = self.lod_min.unwrap_or(crate::lods::LOD_MINIMAL);
+        qry_lod >= min && qry_lod <= max
+    }
 }
 
 impl std::hash::Hash for ActionTemplate {

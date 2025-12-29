@@ -46,12 +46,21 @@ pub struct ActionTrackerOwningAI {
 pub struct ActionTrackerState(pub ActionState);
 
 impl ActionTrackerState {
-    fn ready() -> Self {
+    pub fn ready() -> Self {
         Self(ActionState::Ready)
     }
 
-    fn queued() -> Self {
+    pub fn queued() -> Self {
         Self(ActionState::Queued)
+    }
+
+    pub fn get_state(&self) -> &ActionState {
+        &self.0
+    }
+
+    pub fn set_state(&mut self, state: ActionState) -> &mut Self {
+        self.0 = state;
+        self
     }
 }
 
@@ -76,7 +85,7 @@ pub enum TimeInstantActionTracker {
 /// However, as with all of these, use it as you wish, it's a building block.
 #[derive(Component, Debug)]
 pub struct ActionTrackerCreationTimer {
-    creation_time: TimeInstantActionTracker,
+    pub creation_time: TimeInstantActionTracker,
 }
 
 /// An 'extension' Component for ActionTracker Bundles. 
@@ -95,8 +104,8 @@ pub struct ActionTrackerCreationTimer {
 /// However, as with all of these, use it as you wish, it's a building block.
 #[derive(Component, Debug, Default)]
 pub struct ActionTrackerRuntimeTimer {
-    start_time: Option<TimeInstantActionTracker>,
-    end_time: Option<TimeInstantActionTracker>,
+    pub start_time: Option<TimeInstantActionTracker>,
+    pub end_time: Option<TimeInstantActionTracker>,
 }
 
 /// An 'extension' Component for ActionTracker Bundles. 

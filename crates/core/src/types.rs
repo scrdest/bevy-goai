@@ -62,3 +62,5 @@ pub type ConsiderationSignature = bevy::ecs::system::SystemId<
 // pub(crate) type Action = crate::actions::Action;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
+
+pub type AiLodLevelPrimitive = u8;

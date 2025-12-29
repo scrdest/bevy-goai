@@ -9,6 +9,7 @@ use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSy
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
 use crate::errors::NoCurveMatchStrategyConfig;
 use crate::events::AiDecisionRequested;
+use crate::lods::{AiLevelOfDetail};
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionScore};
 use crate::utility_concepts::{ConsiderationIdentifier};
@@ -41,9 +42,20 @@ use crate::utility_concepts::{ConsiderationIdentifier};
 pub fn ai_action_gather_phase(
     event: On<AiDecisionRequested>,
     actionset_store: Res<ActionSetStore>,
+    lod_query: Query<Option<&AiLevelOfDetail>>, 
     mut request_writer: MessageWriter<ContextFetcherRequest>,
 ) {
     let entity = event.event_target();
+    let lod_level = lod_query.get(entity).ok().flatten().map(|lod| lod.get_current_lod());
+
+    let is_disabled = lod_level.map(|lod| lod.is_inactive() ).unwrap_or(false);
+    if is_disabled {
+        // Early termination - this AI is disabled; generally we'd hope AiDecisionRequested would not even
+        // fire in the first place, but weird things can sometimes happen in sufficiently big projects...
+        bevy::log::debug!("ai_action_gather_phase: AI {:?} disabled by LOD - ignoring decision request.", entity);
+        return;
+    }
+    
     let maybe_smartobjects = &event.smart_objects;
     
     // 1. Gather ActionSets from Smart Objects
@@ -65,14 +77,19 @@ pub fn ai_action_gather_phase(
         bevy::log::debug!("ai_action_gather_phase: Available actions for {:?} are: {:#?}", entity, smartobjects.actionset_refs);
 
         // 2. Emit a request for Context for each ActionTemplate.
-        
-        for action_spec in available_actions {
-            bevy::log::debug!("ai_action_gather_phase: AI {:?}: Requesting Contexts for actionspec {:?}", entity, action_spec.name);
+        for action_tmpl in available_actions {
+            let lod_active = action_tmpl.is_within_lod_range(&lod_level);
+
+            if !lod_active {
+                bevy::log::debug!("ai_action_gather_phase: AI {:?}: Skipping template {:?}", entity, action_tmpl.name);
+            }
+
+            bevy::log::debug!("ai_action_gather_phase: AI {:?}: Requesting Contexts for template {:?}", entity, action_tmpl.name);
             
             request_writer.write(
                 ContextFetcherRequest::new(
                     entity.into(),
-                    action_spec.clone(),
+                    action_tmpl.clone(),
                 )
             );
         }
@@ -82,6 +99,7 @@ pub fn ai_action_gather_phase(
 
 pub fn ai_action_prescoring_phase(
     system_id_map: Res<ConsiderationKeyToSystemIdMap>,
+    entity_checker: Query<(Entity, Option<&AiLevelOfDetail>)>, 
     mut reader: MessageReader<ContextFetchResponse>,
     mut request_writer: MessageWriter<BatchedConsiderationRequest>,
 ) {
@@ -91,7 +109,31 @@ pub fn ai_action_prescoring_phase(
         bevy::log::debug!("ai_action_prescoring_phase: Processing CF message {:?} (ID: {:?})", msg, msg_id);
 
         let audience = &msg.audience;
+        let exists_check = entity_checker.get(audience.entity());
+
+        if exists_check.is_err() {
+            // Sanity check - if an AI is despawned in the meantime, we don't need to process it.
+            bevy::log::debug!("ai_action_prescoring_phase: skipping message {:?} - audience AI {:?} no longer exists", msg_id, audience);
+            continue;
+        }
+
+        let lod_level = exists_check
+            .map(|l| l.1)
+            .ok()
+            .flatten()
+            .map(|c| c.get_current_lod())
+        ;
+
         let action_template = &msg.action_template;
+
+        if !action_template.is_within_lod_range(&lod_level) {
+            bevy::log::debug!(
+                "ai_action_prescoring_phase: skipping message {:?} - audience AI {:?}'s current LOD is out of range for Template {:?}", 
+                msg_id, audience, action_template.name
+            );
+            continue;
+        }
+
         let considerations = &action_template.considerations;
         let contexts = &msg.contexts;
 
@@ -121,6 +163,7 @@ pub fn ai_action_prescoring_phase(
                 scored_context_index: (msg_id.id, ctx_idx),
                 considerations: system_ids.collect(),
             };
+            
             request_writer.write(request_batch);
         }
     }

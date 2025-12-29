@@ -4,7 +4,7 @@
 //! they are, by and large, a subset of Bevy's generic Curves. 
 //! 
 //! For Utility AI purposes, all Curves have a unit interval domain (i.e. 0.0 to 1.0), 
-//! and a range of values that is ALSO a unit interval (visually forming a 1x1 square).
+//! and a range of values that is ALSO a unit interval (visually, forming a 1x1 square).
 //! On top of that most of them are fairly simple and cheap (by necessity).
 //! 
 //! The main purpose of these Curves is to make Considerations more *expressive*.
@@ -15,6 +15,24 @@
 //! And even if higher is better, does 10% higher == 10% better, or is it nonlinear?
 //! 
 //! Curves provide us with the tool to handle this by mapping from the input to the output smoothly.
+//! 
+//! To use a Curve, simply include its key in the ActionSet JSON data for some object. 
+//! The Consideration inputs will be automatically scaled to the right input range and 
+//! fed through the Curve by the scoring system.
+//! 
+//! If you plan on using custom Curves, you will need to register them into the library 
+//! by initializing the `UtilityCurveRegistry` Resource with `app.add_resource()` and 
+//! using the `UtilityCurveRegistry.register_curve()` method with some key (as long 
+//! as it does not conflict with a built-in key!)
+//! 
+//! The most important items in this module, in descending order, are:
+//! 1) The `UtilityCurveRegistry` Resource, which allows you to register your own Curves
+//! 2) The `UtilityCurve` trait which defines what a 'registrable' Curve is for the `UtilityCurveRegistry`
+//! 3) The `SupportedUtilityCurve` enum which holds all built-in Utility Curves - those are a curated 
+//!    selection of building blocks that should cover the majority of your needs. They are also slightly 
+//!    more performant due to the lack of an Arc<T> overhead and a secondary registry lookup.
+//! 4) The methods of UtilityCurveExt - if you are planning to create custom Utility Curves, this  
+//!    trait provides constructors for various transforms that are still valid as Utility Curves.
 
 use std::sync::Arc;
 
@@ -80,6 +98,10 @@ pub trait UtilityCurveExt: UtilityCurve + Sized {
     /// 'floor' of Utility - e.g. `c.hard_leak(0.1)` will always output AT LEAST 0.1 Utility. 
     fn hard_leak(self, gain: ActionScore) -> HardLeak<Self> {
         HardLeak::new(self, gain)
+    }
+
+    fn inverse_samples(self) -> UtilityCurveSampler<Self> {
+        UtilityCurveSampler::new_inverse(self)
     }
 }
 
@@ -577,10 +599,6 @@ pub const CURVE_SQUARE: UtilityCurveSampler<math::curve::QuadraticInCurve> = Uti
 pub const CURVE_ANTISQUARE: UtilityCurveSampler<math::curve::QuadraticInCurve> = UtilityCurveSampler::new_inverse(math::curve::QuadraticInCurve {});
 pub const CURVE_EXPONENTIAL: UtilityCurveSampler<math::curve::ExponentialInCurve> = UtilityCurveSampler::new_forward(math::curve::ExponentialInCurve {});
 pub const CURVE_ANTIEXPONENTIAL: UtilityCurveSampler<math::curve::ExponentialInCurve> = UtilityCurveSampler::new_inverse(math::curve::ExponentialInCurve {});
-// pub const CURVE_TRIANGLE: UtilityCurveSampler<HalfwayMirrorCurve<math::curve::LinearCurve>> = UtilityCurveSampler::new_forward(HalfwayMirrorCurve::from(math::curve::LinearCurve::m {}));
-// pub const CURVE_ANTITRIANGLE: UtilityCurveSampler<HalfwayMirrorCurve<math::curve::LinearCurve>> = UtilityCurveSampler::new_inverse(HalfwayMirrorCurve::from(math::curve::LinearCurve::m {}));
-// pub const CURVE_QUADGAUSS: UtilityCurveSampler<HalfwayMirrorCurve<math::curve::QuadraticInOutCurve>> = UtilityCurveSampler::new_forward(HalfwayMirrorCurve { wrapped_curve: math::curve::QuadraticInOutCurve {} });
-// pub const CURVE_ANTIQUADGAUSS: UtilityCurveSampler<HalfwayMirrorCurve<math::curve::QuadraticInOutCurve>> = UtilityCurveSampler::new_inverse(HalfwayMirrorCurve { wrapped_curve: math::curve::QuadraticInOutCurve {} });
 
 #[derive(Clone)]
 pub enum SupportedUtilityCurve {
