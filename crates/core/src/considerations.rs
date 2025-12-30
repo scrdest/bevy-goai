@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::types::{self, ActionScore, ConsiderationInputs};
+use crate::types::{self, ActionScore, ActionContext, AiEntity, PawnEntity};
 use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 
 
@@ -35,6 +35,38 @@ impl ConsiderationData {
     }
 }
 
+/// Convenience type-alias for generic inputs piped into each Consideration. 
+/// 
+/// You can use it to simply write `fn your_consideration(params: ConsiderationInputs, your_query:...`
+/// instead of having to memorize the specific interface required by the library.
+/// 
+/// This currently comprises:
+/// - Requesting AI - as Entity
+/// - Requesting AI's Pawn (controlled Entity) - as Entity
+/// - The full Context this Consideration is scoring
+/// 
+/// Changes to this interface will be considered semver-breaking once the core lib stabilizes.
+/// 
+/// Note that Considerations are Plain Old Systems, so you can use `Query`, `Commands`, 
+/// and all the other Bevy goodness to write your Consideration logic - but you must 
+/// also include these inputs as a parameter.
+/// 
+/// The point of those inputs is to let the World inject metadata about the AI query 
+/// into your Considerations so that you can use them in your own logic. 
+/// 
+/// The key Entities in play in particular are included to enable no-fuss fast 
+/// retrieval of data about them in your custom Queries (using `Query::get()`). 
+pub type ConsiderationInputs = bevy::prelude::In<(
+    AiEntity, 
+    PawnEntity,
+    Arc<ActionContext>, 
+)>;
+
+/// A general interface for any Consideration.
+/// 
+/// Considerations are, generally, user-implemented Systems. 
+/// They can do anything you want (run queries, read resources, etc.); this interface only cares 
+/// about the return value and inputs piped into each Consideration (i.e. the In<Whatever> params).
 pub trait ConsiderationSystem: bevy::ecs::system::ReadOnlySystem<
     In = ConsiderationInputs, 
     Out = ActionScore
@@ -47,6 +79,8 @@ impl<
     >
 > ConsiderationSystem for ROS {}
 
+/// Something that can be turned into a Consideration. 
+/// Generally meant for functions with a compatible interface.
 pub trait IntoConsiderationSystem<Marker>: IntoSystem<
     ConsiderationInputs, 
     ActionScore, 
@@ -125,8 +159,8 @@ pub struct ConsiderationKeyToSystemMap {
 
 pub trait StoresConsiderationRegistrations {
     fn register_consideration<
-        Marker, 
         CS: ConsiderationSystem, 
+        Marker, 
         F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
@@ -137,17 +171,14 @@ pub trait StoresConsiderationRegistrations {
 
 impl StoresConsiderationRegistrations for World {
     fn register_consideration<
-        Marker, 
         CS: ConsiderationSystem, 
+        Marker, 
         F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
         consideration: F, 
         key: ConsiderationIdentifier
     ) -> &mut Self {
-        // let system_id = self.register_system_cached(consideration);
-        // let mut system_id_registry = self.get_resource_or_init::<ConsiderationKeyToSystemIdMap>();
-        // system_id_registry.mapping.insert(key, system_id);
         let mut system = F::into_system(consideration);
         system.initialize(self);
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
@@ -162,8 +193,8 @@ impl StoresConsiderationRegistrations for World {
 
 impl StoresConsiderationRegistrations for &mut App {
     fn register_consideration<
-        Marker, 
         CS: ConsiderationSystem, 
+        Marker, 
         F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 

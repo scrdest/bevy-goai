@@ -25,46 +25,13 @@ pub type ActionContextList = Vec<ActionContextRef>;
 pub type AiEntity = bevy::prelude::Entity;
 pub type PawnEntity = bevy::prelude::Entity;
 
-/// Convenience type-alias for generic inputs piped into each Consideration. 
-/// 
-/// You can use it to simply write `fn your_consideration(params: ConsiderationInputs, your_query:...`
-/// instead of having to memorize the specific interface required by the library.
-/// 
-/// This currently comprises:
-/// - Requesting AI - as Entity
-/// - Requesting AI's Pawn (controlled Entity) - as Entity
-/// - The full Context this Consideration is scoring
-/// 
-/// Changes to this interface will be considered semver-breaking once the core lib stabilizes.
-/// 
-/// Note that Considerations are Plain Old Systems, so you can use `Query`, `Commands`, 
-/// and all the other Bevy goodness to write your Consideration logic - but you must 
-/// also include these inputs as a parameter.
-/// 
-/// The point of those inputs is to let the World inject metadata about the AI query 
-/// into your Considerations so that you can use them in your own logic. 
-/// 
-/// The key Entities in play in particular are included to enable no-fuss fast 
-/// retrieval of data about them in your custom Queries (using `Query::get()`). 
-pub type ConsiderationInputs = bevy::prelude::In<(
-    AiEntity, 
-    PawnEntity,
-    Arc<ActionContext>, 
-)>;
+pub use crate::context_fetchers::ContextFetcherInputs;
+pub use crate::context_fetchers::ContextFetcherSystem;
+pub use crate::context_fetchers::IntoContextFetcherSystem;
 
-/// A general interface for any Consideration.
-/// 
-/// Considerations are, generally, user-implemented Systems. 
-/// They can do anything you want (run queries, read resources, etc.); this interface only cares 
-/// about the return value and inputs piped into each Consideration (i.e. the In<Whatever> params).
-pub type ConsiderationSignature = bevy::ecs::system::SystemId<
-    // Input(s):
-    ConsiderationInputs,
-    // Output:
-    ActionScore,
->;
-
+pub use crate::considerations::ConsiderationInputs;
 pub use crate::considerations::ConsiderationSystem;
+pub use crate::considerations::IntoConsiderationSystem;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
 

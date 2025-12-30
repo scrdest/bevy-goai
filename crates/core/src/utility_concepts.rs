@@ -4,9 +4,10 @@ use bevy::reflect::{Reflect};
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
+#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ContextFetcherIdentifier(pub String);
+
 
 impl From<String> for ContextFetcherIdentifier {
     fn from(value: String) -> Self {
@@ -20,8 +21,26 @@ impl Borrow<str> for ContextFetcherIdentifier {
     }
 }
 
+impl Borrow<str> for &ContextFetcherIdentifier {
+    fn borrow(&self) -> &str {
+        self.0.borrow()
+    }
+}
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
+impl Borrow<String> for ContextFetcherIdentifier {
+    fn borrow(&self) -> &String {
+        self.0.borrow()
+    }
+}
+
+impl Borrow<String> for &ContextFetcherIdentifier {
+    fn borrow(&self) -> &String {
+        self.0.borrow()
+    }
+}
+
+
+#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct CurveIdentifier(String);
 
@@ -59,6 +78,7 @@ impl Borrow<String> for &CurveIdentifier {
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ConsiderationIdentifier(String);
+
 
 impl From<String> for ConsiderationIdentifier {
     fn from(value: String) -> Self {
