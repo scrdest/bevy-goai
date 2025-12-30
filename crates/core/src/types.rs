@@ -64,7 +64,7 @@ pub type ConsiderationSignature = bevy::ecs::system::SystemId<
     ActionScore,
 >;
 
-// pub(crate) type Action = crate::actions::Action;
+pub use crate::considerations::ConsiderationSystem;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
 

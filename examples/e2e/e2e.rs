@@ -12,7 +12,7 @@ use bevy_cortex::actionset::ActionSet;
 use bevy_cortex::ai::AIController;
 use bevy_cortex::arg_values::ContextValue;
 use bevy_cortex::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, ConsiderationKeyToSystemIdMap, StoresConsiderationRegistrations};
+use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, StoresConsiderationRegistrations};
 use bevy_cortex::decision_loop;
 use bevy_cortex::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};

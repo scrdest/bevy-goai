@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use bevy::prelude::*;
-use bevy::ecs::system::{SystemState};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds, ConsiderationKeyToSystemIdMap};
+use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystem, ConsiderationKeyToSystemMap};
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
 use crate::errors::NoCurveMatchStrategyConfig;
 use crate::events::AiDecisionRequested;
@@ -98,7 +97,7 @@ pub fn ai_action_gather_phase(
 
 
 pub fn ai_action_prescoring_phase(
-    system_id_map: Res<ConsiderationKeyToSystemIdMap>,
+    system_map: Res<ConsiderationKeyToSystemMap>,
     entity_checker: Query<(Entity, Option<&AiLevelOfDetail>)>, 
     mut reader: MessageReader<ContextFetchResponse>,
     mut request_writer: MessageWriter<BatchedConsiderationRequest>,
@@ -141,15 +140,15 @@ pub fn ai_action_prescoring_phase(
             bevy::log::debug!("ai_action_prescoring_phase: Scoring context for template {:?}: {:#?}", action_template.name, ctx);
 
             let system_ids = considerations.iter().map(|con| {
-                let mapped = system_id_map.mapping
+                let mapped = system_map.mapping
                     .get(&con.func_name)
                     .ok_or(())
                     .cloned()
                     ;
                 
-                ConsiderationMappedToSystemIds {
+                ConsiderationMappedToSystem {
                     func_name: con.func_name.to_owned(),
-                    consideration_systemid: mapped,
+                    consideration_system: mapped,
                     curve_name: con.curve_name.to_owned(),
                     min: con.min,
                     max: con.max,
@@ -231,17 +230,14 @@ fn consideration_adjustment(
 
 /// 
 pub fn ai_action_scoring_phase(
-    world: &mut World,
-    params: &mut SystemState<(
-        MessageReader<BatchedConsiderationRequest>,
-    )>
+    world_ref: &World, 
+    utility_curve_registry: Option<Res<UtilityCurveRegistry>>,
+    no_match_strategy_config: Option<Res<NoCurveMatchStrategyConfig>>,
+    mut request_reader: MessageReader<BatchedConsiderationRequest>,
+    mut commands: Commands,
 ) {
     // bevy::log::debug!("Running ai_action_scoring_phase...");
     let messages: Vec<BatchedConsiderationRequest> = {
-        let (
-            mut request_reader, 
-        ) = params.get_mut(world);
-
         request_reader.read().cloned().collect()
     };
     
@@ -305,21 +301,35 @@ pub fn ai_action_scoring_phase(
 
         for (cons_cnt, cons) in msg.considerations.iter().enumerate() {
             // We'll use the Registry resource if we have one and fall back to the hardcoded pool if we do not.
-            let mut maybe_resolved_curve: Option<SupportedUtilityCurve> = match world.get_resource::<UtilityCurveRegistry>() {
-                Some(curve_mapping) => curve_mapping.get_curve_by_name(&cons.curve_name),
-                None => resolve_curve_from_name(&cons.curve_name),
-            };
+            let mut maybe_resolved_curve: Option<SupportedUtilityCurve> = utility_curve_registry
+                .as_ref()
+                .map(|curve_mapping| 
+                    curve_mapping.get_curve_by_name(&cons.curve_name)
+                )
+                .flatten()
+                .or_else(|| resolve_curve_from_name(&cons.curve_name))
+            ;
 
             if maybe_resolved_curve.is_none() {
-                let default_strategy = NoCurveMatchStrategyConfig::default();
-
-                let curve_miss_strategy = world
-                    .get_resource::<crate::errors::NoCurveMatchStrategyConfig>()
-                    .unwrap_or(&default_strategy)
+                let curve_miss_strategy = no_match_strategy_config
+                    .as_ref()
+                    .map(|conf| conf.get_current_value())
                 ;
 
-                match &curve_miss_strategy.0 {
-                    crate::errors::NoCurveMatchStrategy::Panic => {
+                match curve_miss_strategy {
+                    None => {
+                        // This is a duplicate of the Panic strategy as indicated by the Default impl. 
+                        // We COULD create a fallback value earlier, but that would cost us an extra 
+                        // `.clone()` that we can kinda do without here just as well.
+                        bevy::log::warn!(
+                            "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, default behavior - panicking!", 
+                            &msg.entity,
+                            &cons.curve_name
+                        );
+                        panic!("Failed to resolve Curve key to a SupportedUtilityCurve!");
+                    },
+
+                    Some(crate::errors::NoCurveMatchStrategy::Panic) => {
                         bevy::log::warn!(
                             "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, panicking!", 
                             &msg.entity,
@@ -328,7 +338,7 @@ pub fn ai_action_scoring_phase(
                         panic!("Failed to resolve Curve key to a SupportedUtilityCurve!");
                     },
 
-                    crate::errors::NoCurveMatchStrategy::SkipConsiderationWithLog => {
+                    Some(crate::errors::NoCurveMatchStrategy::SkipConsiderationWithLog) => {
                         bevy::log::warn!(
                             "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
                             &msg.entity,
@@ -338,7 +348,7 @@ pub fn ai_action_scoring_phase(
                         continue;
                     },
 
-                    crate::errors::NoCurveMatchStrategy::SkipActionWithLog => {
+                    Some(crate::errors::NoCurveMatchStrategy::SkipActionWithLog) => {
                         bevy::log::warn!(
                             "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping ActionTemplate {:?}!", 
                             &msg.entity,
@@ -348,7 +358,7 @@ pub fn ai_action_scoring_phase(
                         break;
                     },
 
-                    crate::errors::NoCurveMatchStrategy::DefaultCurveWithLog(curve_resolver) => {
+                    Some(crate::errors::NoCurveMatchStrategy::DefaultCurveWithLog(curve_resolver)) => {
                         let resolved = curve_resolver(cons.curve_name.borrow());
                         
                         bevy::log::warn!(
@@ -361,7 +371,7 @@ pub fn ai_action_scoring_phase(
                         maybe_resolved_curve = Some(resolved)
                     },
 
-                    crate::errors::NoCurveMatchStrategy::DefaultCurveWithoutLog(curve_resolver) => {
+                    Some(crate::errors::NoCurveMatchStrategy::DefaultCurveWithoutLog(curve_resolver)) => {
                         let resolved = curve_resolver(cons.curve_name.borrow());
                         maybe_resolved_curve = Some(resolved)
                     },
@@ -371,21 +381,39 @@ pub fn ai_action_scoring_phase(
             // We can safely unwrap this as any handling/panicking has been done earlier.
             let resolved_curve = maybe_resolved_curve.unwrap();
 
-            match cons.consideration_systemid {
+            match &cons.consideration_system {
                 Err(_) => bevy::log::debug!(
                     "AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
                     &msg.entity,
                     &cons.func_name
                 ),
-                Ok(system_id) => {
-                    let res = world.run_system_with(
-                        system_id,
-                        (
-                            msg.entity.entity(),
-                            msg.entity.entity(),
-                            msg.scored_context.to_owned(),
-                        )
-                    );
+
+                Ok(system_guard) => {
+                    let res = system_guard
+                        .write()
+                        .map(|mut consideration_system| {
+                            consideration_system.run_readonly(
+                            (
+                                    msg.entity.entity(),
+                                    msg.entity.entity(),
+                                    msg.scored_context.to_owned(),
+                                ),
+                                world_ref,
+                            )
+                        })
+                    ;
+
+                    if res.is_err() {
+                        bevy::log::debug!(
+                            "AI {:?} - Consideration '{:}' errored - lock poisoned ({:?})!", 
+                            &msg.entity, 
+                            &cons.func_name, 
+                            &res
+                        );
+                        panic!("Consideration failed - lock poisoned!");
+                    };
+
+                    let res = res.unwrap();
 
                     if res.is_err() {
                         bevy::log::debug!(
@@ -394,11 +422,13 @@ pub fn ai_action_scoring_phase(
                             &cons.func_name, 
                             &res
                         );
-                        continue;
+                        curr_score = types::MIN_CONSIDERATION_SCORE - 1.;
+                        break;
                     };
 
                     let raw_score = res.expect(
-                        "Failed to unwrap a res to a raw_score. It should always be Ok, but is Err somehow."
+                        "Failed to unwrap a Consideration result to a raw_score. 
+                        It should always be Ok, but is somehow an Err value."
                     );
 
                     let (true_min, true_max) = match cons.min <= cons.max {
@@ -453,7 +483,6 @@ pub fn ai_action_scoring_phase(
                     // We don't need to bother checking other Considerations for this Context, 
                     // as it will not get picked anyway.
                     if curr_template_best >= curr_score {
-                        
                         bevy::log::debug!(
                             "AI {:?} - Consideration '{:}' for Action {:?} - score {:?} is below the template best of {:?}, discarding the Context.",
                             msg.entity,
@@ -537,6 +566,6 @@ pub fn ai_action_scoring_phase(
             action_score: best_score,
         };
 
-        world.trigger(pick_evt);
+        commands.trigger(pick_evt);
     }
 }

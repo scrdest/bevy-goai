@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::types::{self, ActionScore};
+use crate::types::{self, ActionScore, ConsiderationInputs};
 use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 
 
@@ -34,14 +35,44 @@ impl ConsiderationData {
     }
 }
 
+pub trait ConsiderationSystem: bevy::ecs::system::ReadOnlySystem<
+    In = ConsiderationInputs, 
+    Out = ActionScore
+> {}
 
-#[derive(Clone, Debug)]
-pub struct ConsiderationMappedToSystemIds {
+impl<
+    ROS: bevy::ecs::system::ReadOnlySystem<
+        In = ConsiderationInputs, 
+        Out = ActionScore
+    >
+> ConsiderationSystem for ROS {}
+
+pub trait IntoConsiderationSystem<Marker>: IntoSystem<
+    ConsiderationInputs, 
+    ActionScore, 
+    Marker,
+> {}
+
+impl<
+    Marker, 
+    CS: ConsiderationSystem, 
+    IS: IntoSystem<
+        ConsiderationInputs,
+        ActionScore, 
+        Marker,
+        System = CS
+    >
+> IntoConsiderationSystem<Marker> for IS {}
+
+
+#[derive(Clone)]
+pub struct ConsiderationMappedToSystem {
     pub func_name: ConsiderationIdentifier,
 
     // NOTE: This is Result<T> as the registry lookup is fallible 
     //       and we will need to propagate these errors later on.
-    pub consideration_systemid: Result<types::ConsiderationSignature, ()>,
+    // pub consideration_systemid: Result<types::ConsiderationSignature, ()>,
+    pub consideration_system: Result<Arc<RwLock<dyn ConsiderationSystem>>, ()>,
     pub curve_name: CurveIdentifier,
 
     pub min: types::ActionScore,
@@ -74,25 +105,29 @@ pub struct ConsiderationMappedToSystemIds {
 /// The second reason is optimization.
 /// If we know this Action is never gonna make it, we would ideally avoid running any more Considerations 
 /// for it - Considerations can be fairly complex and expensive queries, so the fewer, the better.
-#[derive(Message, Debug, Clone)]
+#[derive(Message, Clone)]
 pub struct BatchedConsiderationRequest {
     pub entity: types::EntityIdentifier, 
     pub scored_action_template: types::ActionTemplateRef,
     pub scored_context: types::ActionContextRef,
-    pub considerations: Vec<ConsiderationMappedToSystemIds>,
+    pub considerations: Vec<ConsiderationMappedToSystem>,
 }
 
 
 #[derive(Resource, Default)]
-pub struct ConsiderationKeyToSystemIdMap {
-    pub mapping: HashMap<ConsiderationIdentifier, types::ConsiderationSignature>
+pub struct ConsiderationKeyToSystemMap {
+    pub mapping: HashMap<
+        ConsiderationIdentifier, 
+        std::sync::Arc<std::sync::RwLock<dyn ConsiderationSystem>>
+    >
 }
 
 
 pub trait StoresConsiderationRegistrations {
     fn register_consideration<
         Marker, 
-        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+        CS: ConsiderationSystem, 
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
         consideration: F, 
@@ -103,15 +138,24 @@ pub trait StoresConsiderationRegistrations {
 impl StoresConsiderationRegistrations for World {
     fn register_consideration<
         Marker, 
-        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+        CS: ConsiderationSystem, 
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
         consideration: F, 
         key: ConsiderationIdentifier
     ) -> &mut Self {
-        let system_id = self.register_system_cached(consideration);
-        let mut registry = self.get_resource_or_init::<ConsiderationKeyToSystemIdMap>();
-        registry.mapping.insert(key, system_id);
+        // let system_id = self.register_system_cached(consideration);
+        // let mut system_id_registry = self.get_resource_or_init::<ConsiderationKeyToSystemIdMap>();
+        // system_id_registry.mapping.insert(key, system_id);
+        let mut system = F::into_system(consideration);
+        system.initialize(self);
+        let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
+        system_registry.mapping.insert(
+            key, 
+            std::sync::Arc::new(std::sync::RwLock::new(
+                system
+            )));
         self
     }
 }
@@ -119,7 +163,8 @@ impl StoresConsiderationRegistrations for World {
 impl StoresConsiderationRegistrations for &mut App {
     fn register_consideration<
         Marker, 
-        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+        CS: ConsiderationSystem, 
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
         consideration: F, 

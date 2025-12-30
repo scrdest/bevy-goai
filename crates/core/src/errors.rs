@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bevy::ecs::resource::Resource;
 
 #[derive(Debug)]
@@ -15,14 +17,14 @@ impl<F: Send + Sync + Fn(&String) -> crate::curves::SupportedUtilityCurve> Curve
 /// By default the AI code will panic to avoid either running Actions in unexpected 
 /// and potentially harmful ways or silently skipping bad inputs, but users may 
 /// opt-in into alternative behaviors (skip/default) at their own responsibility.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum NoCurveMatchStrategy {
     #[default]
     Panic,
     SkipConsiderationWithLog,
     SkipActionWithLog,
-    DefaultCurveWithLog(Box<dyn CurveResolverFn>),
-    DefaultCurveWithoutLog(Box<dyn CurveResolverFn>),
+    DefaultCurveWithLog(Arc<dyn CurveResolverFn>),
+    DefaultCurveWithoutLog(Arc<dyn CurveResolverFn>),
 }
 
 impl NoCurveMatchStrategy {
@@ -41,13 +43,13 @@ impl NoCurveMatchStrategy {
     pub fn log_and_default_to<F: Send + Sync + Fn(&String) -> crate::curves::SupportedUtilityCurve + 'static>(
         curve_fn: F
     ) -> Self {
-        Self::DefaultCurveWithLog(Box::new(curve_fn))
+        Self::DefaultCurveWithLog(Arc::new(curve_fn))
     }
 
     pub fn quietly_default_to<F: Send + Sync + Fn(&String) -> crate::curves::SupportedUtilityCurve + 'static>(
         curve_fn: F
     ) -> Self {
-        Self::DefaultCurveWithoutLog(Box::new(curve_fn))
+        Self::DefaultCurveWithoutLog(Arc::new(curve_fn))
     }
 }
 
@@ -69,6 +71,10 @@ impl std::fmt::Debug for NoCurveMatchStrategy {
 pub struct NoCurveMatchStrategyConfig(pub NoCurveMatchStrategy);
 
 impl NoCurveMatchStrategyConfig {
+    pub fn get_current_value(&self) -> &NoCurveMatchStrategy {
+        return &self.0
+    }
+
     /// Sets the handler to one of the supported strategies (panic, skip, default, etc.).
     pub fn set(&mut self, strategy: NoCurveMatchStrategy) -> &mut Self {
         self.0 = strategy;
