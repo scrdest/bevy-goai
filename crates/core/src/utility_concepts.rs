@@ -66,6 +66,12 @@ impl From<String> for ConsiderationIdentifier {
     }
 }
 
+impl From<&str> for ConsiderationIdentifier {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
 impl Borrow<str> for ConsiderationIdentifier {
     fn borrow(&self) -> &str {
         self.0.borrow()

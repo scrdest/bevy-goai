@@ -1,21 +1,21 @@
-use bevy_goai::*;
+use bevy_cortex::*;
 use goai_core::types::{ActionContextRef, ActionScore};
 
 use std::collections::HashMap;
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use serde_json;
-use bevy_goai::actions::{ActionTemplate};
-use bevy_goai::action_runtime::*;
-use bevy_goai::action_state::ActionState;
-use bevy_goai::actionset::ActionSet;
-use bevy_goai::ai::AIController;
-use bevy_goai::arg_values::ContextValue;
-use bevy_goai::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use bevy_goai::considerations::{BatchedConsiderationRequest, ConsiderationData};
-use bevy_goai::decision_loop;
-use bevy_goai::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
-use bevy_goai::smart_object::{ActionSetStore, SmartObjects};
+use bevy_cortex::actions::{ActionTemplate};
+use bevy_cortex::action_runtime::*;
+use bevy_cortex::action_state::ActionState;
+use bevy_cortex::actionset::ActionSet;
+use bevy_cortex::ai::AIController;
+use bevy_cortex::arg_values::ContextValue;
+use bevy_cortex::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
+use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, ConsiderationKeyToSystemIdMap, StoresConsiderationRegistrations};
+use bevy_cortex::decision_loop;
+use bevy_cortex::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
+use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "ExampleCF";
 
@@ -204,21 +204,6 @@ fn setup_example_entity(
     });
 }
 
-fn setup_example_consideration_registration(
-    mut commands: Commands,
-    mut consideration_registry: ResMut<decision_loop::ConsiderationKeyToSystemIdMap>,
-) {
-    consideration_registry.mapping.insert(
-        ConsiderationIdentifier::from("One".to_string()), 
-        commands.register_system(example_consideration_one)
-    );
-
-    consideration_registry.mapping.insert(
-        ConsiderationIdentifier::from("Two".to_string()), 
-        commands.register_system(example_consideration_two)
-    );
-}
-
 fn setup_default_action_tracker_config(
     mut config_res: ResMut<UserDefaultActionTrackerSpawnConfig>
 ) {
@@ -342,14 +327,14 @@ fn main() {
     .init_resource::<UserDefaultActionTrackerSpawnConfig>()
     .init_resource::<ActionSetStore>()
     .init_resource::<DespawnedAnyActionTrackers>()
-    .init_resource::<decision_loop::ConsiderationKeyToSystemIdMap>()
+    .register_consideration(example_consideration_one, "One".into())
+    .register_consideration(example_consideration_two, "Two".into())
     .add_message::<ContextFetcherRequest>()
     .add_message::<ContextFetchResponse>()
     .add_message::<BatchedConsiderationRequest>()
     .register_function_with_name(EXAMPLE_CONTEXT_FETCHER_NAME, example_context_fetcher)
     .add_systems(Startup, (
         setup_example_entity, 
-        setup_example_consideration_registration,
         setup_default_action_tracker_config,
     ))
     .add_observer(create_tracker_for_picked_action)

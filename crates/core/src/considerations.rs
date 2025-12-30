@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::types;
+use crate::types::{self, ActionScore};
 use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 
 
@@ -78,4 +80,52 @@ pub struct BatchedConsiderationRequest {
     pub scored_action_template: types::ActionTemplateRef,
     pub scored_context: types::ActionContextRef,
     pub considerations: Vec<ConsiderationMappedToSystemIds>,
+}
+
+
+#[derive(Resource, Default)]
+pub struct ConsiderationKeyToSystemIdMap {
+    pub mapping: HashMap<ConsiderationIdentifier, types::ConsiderationSignature>
+}
+
+
+pub trait StoresConsiderationRegistrations {
+    fn register_consideration<
+        Marker, 
+        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+    >(
+        &mut self, 
+        consideration: F, 
+        key: ConsiderationIdentifier
+    ) -> &mut Self;
+}
+
+impl StoresConsiderationRegistrations for World {
+    fn register_consideration<
+        Marker, 
+        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+    >(
+        &mut self, 
+        consideration: F, 
+        key: ConsiderationIdentifier
+    ) -> &mut Self {
+        let system_id = self.register_system_cached(consideration);
+        let mut registry = self.get_resource_or_init::<ConsiderationKeyToSystemIdMap>();
+        registry.mapping.insert(key, system_id);
+        self
+    }
+}
+
+impl StoresConsiderationRegistrations for &mut App {
+    fn register_consideration<
+        Marker, 
+        F: bevy::prelude::IntoSystem<types::ConsiderationInputs, ActionScore, Marker> + 'static
+    >(
+        &mut self, 
+        consideration: F, 
+        key: ConsiderationIdentifier
+    ) -> &mut Self {
+        self.world_mut().register_consideration(consideration, key);
+        self
+    }
 }

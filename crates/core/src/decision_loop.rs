@@ -3,14 +3,13 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use bevy::ecs::system::{SystemState};
 use crate::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds};
+use crate::considerations::{BatchedConsiderationRequest, ConsiderationMappedToSystemIds, ConsiderationKeyToSystemIdMap};
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
 use crate::errors::NoCurveMatchStrategyConfig;
 use crate::events::AiDecisionRequested;
 use crate::lods::{AiLevelOfDetail};
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionContextRef, ActionScore, ActionTemplateRef};
-use crate::utility_concepts::{ConsiderationIdentifier};
 
 
 /// Stage 1 of an AI decision loop. 
@@ -228,12 +227,6 @@ fn consideration_adjustment(
     );
 
     adjusted_score
-}
-
-
-#[derive(Resource, Default)]
-pub struct ConsiderationKeyToSystemIdMap {
-    pub mapping: HashMap<ConsiderationIdentifier, types::ConsiderationSignature>
 }
 
 /// 
