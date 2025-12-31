@@ -1,57 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
-use crate::types::{self, ActionTemplate, ActionContext, AiEntity, PawnEntity};
-
-/// A Message representing a single request for a ContextFetcher call from the AI lib to user code. 
-/// 
-/// Users are expected to implement a System that uses a MessageReader for this type and dispatches 
-/// their custom logic to handle them on a case-by-case basis..
-#[derive(Message, Debug)]
-pub struct ContextFetcherRequest {
-    pub action_template: Arc<ActionTemplate>,
-    pub audience: types::EntityIdentifier, 
-}
-
-impl ContextFetcherRequest {
-    pub fn new(
-        audience: types::EntityIdentifier, 
-        action_template: Arc<ActionTemplate>,
-    ) -> Self {
-        Self {
-            action_template: action_template,
-            audience: audience,
-        }
-    }
-}
-
-#[derive(Message, Debug)]
-pub struct ContextFetchResponse {
-    /// The meat of the response - the Context that has been requested.
-    pub contexts: types::ActionContextList, 
-    
-    /// The ActionTemplate this request came for (mainly to tie it back together as an Action)
-    pub action_template: Arc<ActionTemplate>, 
-
-    /// The AI this was requested for; primarily so that we can split 
-    /// the scoring process per each Audience, 
-    /// even if the Messages for them wind up interleaved.
-    pub audience: types::EntityIdentifier, 
-}
-
-impl ContextFetchResponse {
-    pub fn new(
-        action_template: Arc<ActionTemplate>,
-        contexts: types::ActionContextList,
-        audience: types::EntityIdentifier,
-    ) -> Self {
-        Self {
-            action_template: action_template,
-            contexts: contexts,
-            audience: audience,
-        }
-    }
-}
+use crate::types::{self, ActionContext, AiEntity, PawnEntity};
 
 
 /// Convenience type-alias for generic inputs piped into each ContextFetcher. 
@@ -79,8 +29,15 @@ pub type ContextFetcherInputs = bevy::prelude::In<(
     PawnEntity,
 )>;
 
+/// Convenience type-alias for the output type required from a ContextFetcher System. 
 pub type ContextFetcherOutputs = Vec<ActionContext>;
 
+/// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
+/// that can be used as a Cortex ContextFetcher.
+/// 
+/// Note that the associated `In` type only adds the restriction that your custom 
+/// functions must *at least* accept the metadata piped into them; you can add any 
+/// number of Queries, Resource accesses, etc. - as long as they are read-only.
 pub trait ContextFetcherSystem: bevy::ecs::system::ReadOnlySystem<
     In = ContextFetcherInputs, 
     Out = ContextFetcherOutputs,
@@ -93,6 +50,9 @@ impl<
     >
 > ContextFetcherSystem for ROS {}
 
+
+/// A specialization of Bevy's `IntoSystem` trait that defines any function 
+/// that can be turned into a valid Cortex ContextFetcher System.
 pub trait IntoContextFetcherSystem<Marker>: IntoSystem<
     ContextFetcherInputs, 
     ContextFetcherOutputs, 

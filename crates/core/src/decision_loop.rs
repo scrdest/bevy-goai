@@ -175,10 +175,10 @@ pub fn decision_engine(
         }
     )
     .flat_map(|acts| {
-        acts.actions.iter()
+        acts.actions
+        .iter()
         .cloned()
         .map(|act| std::sync::Arc::new(act))
-        // .collect::<Vec<types::ActionTemplateRef>>()
     });
 
     bevy::log::debug!(
@@ -219,21 +219,21 @@ pub fn decision_engine(
 
                 if res.is_err() {
                     bevy::log::error!(
-                        "AI {:?} - ContextFetcher '{:?}' errored - lock poisoned ({:?})!", 
+                        "decision_engine: AI {:?} - ContextFetcher '{:?}' errored - lock poisoned ({:?})!", 
                         &audience, 
                         &action_template.context_fetcher_name, 
                         &res,
                     );
                     // If the lock has been poisoned, we've had a panic inside it, 
                     // so we're in uncharted waters - abort before things get worse.
-                    panic!("ContextFetcher failed - lock poisoned!");
+                    panic!("decision_engine: ContextFetcher failed - lock poisoned!");
                 };
 
                 let res = res.unwrap();
 
                 if res.is_err() {
                     bevy::log::error!(
-                        "AI {:?} - ContextFetcher '{:?}' errored: {:?}", 
+                        "decision_engine: AI {:?} - ContextFetcher '{:?}' errored: {:?}", 
                         &audience, 
                         &action_template.context_fetcher_name, 
                         &res,
@@ -241,11 +241,11 @@ pub fn decision_engine(
                     continue;
                 };
 
-                res.expect("ContextFetcher result is Err - this should not be possible!")
+                res.expect("decision_engine: ContextFetcher result is Err - this should not be possible!")
             },
             None => {
                 bevy::log::error!(
-                    "AI {:?} - ContextFetcher key '{:?}' could not be resolved to a System!", 
+                    "decision_engine: AI {:?} - ContextFetcher key '{:?}' could not be resolved to a System!", 
                     &audience, 
                     &action_template.context_fetcher_name, 
                 );
@@ -256,7 +256,7 @@ pub fn decision_engine(
         for ctx in contexts {
             let ctx_ref = std::sync::Arc::new(ctx);
             
-            bevy::log::debug!("AI {:?} - processing Ctx {:?} for Action {:?}", 
+            bevy::log::debug!("decision_engine: AI {:?} - processing Ctx {:?} for Action {:?}", 
                 &audience,
                 &ctx_ref, 
                 &action_template,
@@ -315,26 +315,26 @@ pub fn decision_engine(
                             // This is a duplicate of the Panic strategy as indicated by the Default impl. 
                             // We COULD create a fallback value earlier, but that would cost us an extra 
                             // `.clone()` that we can kinda do without here just as well.
-                            bevy::log::warn!(
-                                "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, default behavior - panicking!", 
+                            bevy::log::error!(
+                                "decision_engine: AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, default behavior - panicking!", 
                                 &audience,
                                 &cons.curve_name
                             );
-                            panic!("Failed to resolve Curve key to a SupportedUtilityCurve!");
+                            panic!("decision_engine: Failed to resolve Curve key to a SupportedUtilityCurve!");
                         },
 
                         Some(crate::errors::NoCurveMatchStrategy::Panic) => {
-                            bevy::log::warn!(
-                                "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, panicking!", 
+                            bevy::log::error!(
+                                "decision_engine: AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, panicking!", 
                                 &audience,
                                 &cons.curve_name
                             );
-                            panic!("Failed to resolve Curve key to a SupportedUtilityCurve!");
+                            panic!("decision_engine: Failed to resolve Curve key to a SupportedUtilityCurve!");
                         },
 
                         Some(crate::errors::NoCurveMatchStrategy::SkipConsiderationWithLog) => {
                             bevy::log::warn!(
-                                "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
+                                "decision_engine: AI {:?} - failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
                                 &audience,
                                 &cons.curve_name,
                                 &cons.func_name,
@@ -344,7 +344,7 @@ pub fn decision_engine(
 
                         Some(crate::errors::NoCurveMatchStrategy::SkipActionWithLog) => {
                             bevy::log::warn!(
-                                "AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping ActionTemplate {:?}!", 
+                                "decision_engine: AI {:?} - failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping ActionTemplate {:?}!", 
                                 &audience,
                                 &cons.curve_name,
                                 &action_template.name,
@@ -380,11 +380,14 @@ pub fn decision_engine(
                 ;
 
                 match consideration_system {
-                    None => bevy::log::debug!(
-                        "AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
-                        &audience,
-                        &cons.func_name
-                    ),
+                    None => {
+                        bevy::log::error!(
+                            "decision_engine: AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
+                            &audience,
+                            &cons.func_name
+                        );
+                        break;
+                    },
 
                     Some(system_guard) => {
                         let res = system_guard
@@ -402,7 +405,7 @@ pub fn decision_engine(
                         ;
 
                         if res.is_err() {
-                            bevy::log::debug!(
+                            bevy::log::error!(
                                 "AI {:?} - Consideration '{:}' errored - lock poisoned ({:?})!", 
                                 &audience, 
                                 &cons.func_name, 
@@ -414,8 +417,8 @@ pub fn decision_engine(
                         let res = res.unwrap();
 
                         if res.is_err() {
-                            bevy::log::debug!(
-                                "AI {:?} - Consideration '{:}' errored: {:?}", 
+                            bevy::log::error!(
+                                "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
                                 &audience, 
                                 &cons.func_name, 
                                 &res
@@ -425,7 +428,7 @@ pub fn decision_engine(
                         };
 
                         let raw_score = res.expect(
-                            "Failed to unwrap a Consideration result to a raw_score. 
+                            "decision_engine: Failed to unwrap a Consideration result to a raw_score. 
                             It should always be Ok, but is somehow an Err value."
                         );
 
@@ -462,7 +465,7 @@ pub fn decision_engine(
                         curr_score *= score;
 
                         bevy::log::debug!(
-                            "AI {:?} - Consideration '{:}' for Action {:?}:  
+                            "decision_engine: AI {:?} - Consideration '{:}' for Action {:?}:  
                             - Raw score => {:?}
                             - Rescaled w/ min/max => {:?}
                             - Adjusted w/ Curve {:?} => {:?}
@@ -482,7 +485,7 @@ pub fn decision_engine(
                         // as it will not get picked anyway.
                         if curr_template_best >= curr_score {
                             bevy::log::debug!(
-                                "AI {:?} - Consideration '{:}' for Action {:?} - score {:?} is below the template best of {:?}, discarding the Context.",
+                                "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - score {:?} is below the template best of {:?}, discarding the Context.",
                                 audience,
                                 cons.func_name,
                                 &action_template.name,
@@ -542,7 +545,10 @@ pub fn decision_engine(
 
     match best_scoring_triple {
         None => {
-            bevy::log::debug!("")
+            bevy::log::info!(
+                "decision_engine: AI {:?} - no suitable Actions found.",
+                &audience,
+            )
         }
         Some(best_tuple) => {
             let (
@@ -552,10 +558,10 @@ pub fn decision_engine(
             ) = best_tuple;
 
             bevy::log::info!(
-                "Picking Action {:?} w/ Score {:?} for AI {:?}...", 
+                "decision_engine: AI {:?} - Picking Action {:?} w/ Score {:?}.", 
+                &audience,
                 &best_template.name,
                 &best_score,
-                &audience,
             );
 
             let pick_evt = crate::events::AiActionPicked {

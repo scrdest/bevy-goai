@@ -1,21 +1,22 @@
-use bevy_cortex::*;
-use goai_core::types::{ActionContextRef, ActionScore};
-
 use std::collections::HashMap;
+
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use serde_json;
+
 use bevy_cortex::actions::{ActionTemplate};
 use bevy_cortex::action_runtime::*;
 use bevy_cortex::action_state::ActionState;
 use bevy_cortex::actionset::ActionSet;
 use bevy_cortex::ai::AIController;
 use bevy_cortex::arg_values::ContextValue;
-use bevy_cortex::context_fetchers::{ContextFetcherRequest, ContextFetchResponse, AcceptsContextFetcherRegistrations};
-use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, AcceptsConsiderationRegistrations};
-use bevy_cortex::decision_loop;
+use bevy_cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
+use bevy_cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
+use bevy_cortex::events;
+use bevy_cortex::types::{self, ActionContextRef, ActionScore};
 use bevy_cortex::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
+use bevy_cortex::CortexPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "ExampleCF";
 
@@ -196,7 +197,7 @@ fn setup_example_entity(
 
     let ai_id = spawned.id();
 
-    commands.trigger(crate::events::AiDecisionRequested { 
+    commands.trigger(events::AiDecisionRequested { 
         entity: ai_id,  
         smart_objects: Some(new_sos),
     });
@@ -294,23 +295,15 @@ fn main() {
             fmt_layer: |_| None,
         }
     ))
-    .init_resource::<UserDefaultActionTrackerSpawnConfig>()
-    .init_resource::<ActionSetStore>()
+    .add_plugins(CortexPlugin)
     .init_resource::<DespawnedAnyActionTrackers>()
     .register_consideration(example_consideration_one, "One".into())
     .register_consideration(example_consideration_two, "Two".into())
     .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME.to_string().into())
-    .add_message::<ContextFetcherRequest>()
-    .add_message::<ContextFetchResponse>()
-    .add_message::<BatchedConsiderationRequest>()
     .add_systems(Startup, (
         setup_example_entity, 
         setup_default_action_tracker_config,
     ))
-    .add_observer(create_tracker_for_picked_action)
-    .add_observer(actiontracker_spawn_requested)
-    .add_observer(actiontracker_despawn_requested)
-    .add_observer(decision_loop::decision_engine)
     .add_observer(example_action)
     .add_observer(mark_despawn_occurred)
     .add_systems(FixedUpdate, (
@@ -319,7 +312,6 @@ fn main() {
     .add_systems(
         FixedPostUpdate, 
         (
-            actiontracker_done_cleanup_system,
             exit_on_finish_all_tasks,
         ).chain()
     )

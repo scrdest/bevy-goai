@@ -1,0 +1,16 @@
+[package]
+name = "cortex-bevy-plugin"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.17.3", features = ["dynamic_linking"] }
+cortex-core = {path = "../core"}
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3

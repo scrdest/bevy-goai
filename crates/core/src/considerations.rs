@@ -62,13 +62,16 @@ pub type ConsiderationInputs = bevy::prelude::In<(
     Arc<ActionContext>, 
 )>;
 
+/// Convenience type-alias for the output type a Consideration must return.
 pub type ConsiderationOutputs = ActionScore;
 
-/// A general interface for any Consideration.
+
+/// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
+/// that can be used as a Cortex Consideration.
 /// 
-/// Considerations are, generally, user-implemented Systems. 
-/// They can do anything you want (run queries, read resources, etc.); this interface only cares 
-/// about the return value and inputs piped into each Consideration (i.e. the In<Whatever> params).
+/// Note that the associated `In` type only adds the restriction that your custom 
+/// functions must *at least* accept the metadata piped into them; you can add any 
+/// number of Queries, Resource accesses, etc. - as long as they are read-only.
 pub trait ConsiderationSystem: bevy::ecs::system::ReadOnlySystem<
     In = ConsiderationInputs, 
     Out = ActionScore
@@ -81,8 +84,9 @@ impl<
     >
 > ConsiderationSystem for ROS {}
 
-/// Something that can be turned into a Consideration. 
-/// Generally meant for functions with a compatible interface.
+
+/// A specialization of Bevy's `IntoSystem` trait that defines any function 
+/// that can be turned into a valid Cortex Consideration System.
 pub trait IntoConsiderationSystem<Marker>: IntoSystem<
     ConsiderationInputs, 
     ActionScore, 
@@ -113,40 +117,6 @@ pub struct ConsiderationMappedToSystem {
 
     pub min: types::ActionScore,
     pub max: types::ActionScore,
-}
-
-
-/// A Message that represents a request to the user code to run a batch of Consideration Systems (and
-/// their Curves) corresponding to keys provided. It should return ConsiderationResponse Messages for
-/// any associated Action IF it has any chance of getting picked (i.e. you can optimize away some
-/// Messages if you know the resulting score is too low).
-/// 
-/// This is a layer of abstraction between the core AI engine and user code; 
-/// the AI code does not care how exactly you calculate the scores for the 
-/// response, just that you get it done somehow. 
-/// 
-/// The idea is that as a user, you route the messages to your own implementations as appropriate.
-/// Because we use abstracted Messages for communication, any number of libraries and systems can 
-/// hook into this core engine, and AI commands remain valid across saves and version migrations 
-/// (with the worst-case scenario being that the app no longer supports the selected Action and the 
-/// message is ignored).
-/// 
-/// We batch Requests because Considerations are not entirely independent.
-/// 
-/// The first reason is the scoring adjustment. 
-/// A quirk of how we do Utility math means that Considerations are subtractive; each added Consideration 
-/// is another thing dragging the total score down a bit. That disincentivizes making AIs smarter; no bueno.
-/// There is a math hack to work around that, but it relies on knowing how many Considerations we've used.
-/// 
-/// The second reason is optimization.
-/// If we know this Action is never gonna make it, we would ideally avoid running any more Considerations 
-/// for it - Considerations can be fairly complex and expensive queries, so the fewer, the better.
-#[derive(Message, Clone)]
-pub struct BatchedConsiderationRequest {
-    pub entity: types::EntityIdentifier, 
-    pub scored_action_template: types::ActionTemplateRef,
-    pub scored_context: types::ActionContextRef,
-    pub considerations: Vec<ConsiderationMappedToSystem>,
 }
 
 

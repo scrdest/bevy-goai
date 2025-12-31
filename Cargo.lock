@@ -333,9 +333,8 @@ name = "bevy-cortex"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "enum_delegate",
- "goai-core",
- "rand 0.9.2",
+ "cortex-bevy-plugin",
+ "cortex-core",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1921,6 +1920,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-bevy-plugin"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cortex-core",
+]
+
+[[package]]
+name = "cortex-core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "enum_delegate",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "cosmic-text"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2570,18 +2589,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c4ee00b289aba7a9e5306d57c2d05499b2e5dc427f84ac708bd2c090212cf3e"
 dependencies = [
  "gl_generator",
-]
-
-[[package]]
-name = "goai-core"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "enum_delegate",
- "rand 0.9.2",
- "serde",
- "serde_json",
- "serde_yaml",
 ]
 
 [[package]]
