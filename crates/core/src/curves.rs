@@ -985,7 +985,7 @@ pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Op
 }
 
 /// A map that lets us request Utility Curves by a string key and register new entries for custom Curves. 
-#[derive(bevy::prelude::Resource, Clone)]
+#[derive(bevy::prelude::Resource, Clone, Default)]
 pub struct UtilityCurveRegistry {
     mapping: std::collections::HashMap<String, SupportedUtilityCurve>
 }
@@ -1016,3 +1016,53 @@ impl UtilityCurveRegistry {
         }
     }
 }
+
+
+/// Something that allows us to register a UtilityCurve to the World. 
+/// 
+/// Note that for convenience, the first registration attempt 
+/// will initialize *an empty registry* if one does not exist yet, so
+/// you don't need to use `app.initialize_resource::<UtilityCurveRegistry>()` 
+/// unless you want to be explicit about it.
+pub trait AcceptsCurveRegistrations {
+    fn register_utility_curve<
+        U: UtilityCurve + 'static,
+    >(
+        &mut self, 
+        consideration: U, 
+        key: crate::types::UtilityCurveKey,
+    ) -> &mut Self;
+}
+
+impl AcceptsCurveRegistrations for bevy::prelude::World {
+    fn register_utility_curve<
+        U: UtilityCurve + 'static,
+    >(
+        &mut self, 
+        curve: U, 
+        key: crate::types::UtilityCurveKey,
+    ) -> &mut Self {
+        let mut registry = self.get_resource_or_init::<UtilityCurveRegistry>();
+        registry.mapping.insert(
+            key, 
+            SupportedUtilityCurve::Custom(
+                std::sync::Arc::new(curve)
+            )
+        );
+        self
+    }
+}
+
+impl AcceptsCurveRegistrations for bevy::prelude::App {
+    fn register_utility_curve<
+        U: UtilityCurve + 'static,
+    >(
+        &mut self, 
+        curve: U, 
+        key: crate::types::UtilityCurveKey,
+    ) -> &mut Self {
+        self.world_mut().register_utility_curve(curve, key);
+        self
+    }
+}
+

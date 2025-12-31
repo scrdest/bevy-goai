@@ -62,6 +62,8 @@ pub type ConsiderationInputs = bevy::prelude::In<(
     Arc<ActionContext>, 
 )>;
 
+pub type ConsiderationOutputs = ActionScore;
+
 /// A general interface for any Consideration.
 /// 
 /// Considerations are, generally, user-implemented Systems. 
@@ -157,7 +159,13 @@ pub struct ConsiderationKeyToSystemMap {
 }
 
 
-pub trait StoresConsiderationRegistrations {
+/// Something that allows us to register a ContextFetcher to the World. 
+/// 
+/// Note that for convenience, the first registration attempt 
+/// will initialize *an empty registry* if one does not exist yet, so
+/// you don't need to use `app.initialize_resource::<UtilityCurveRegistry>()` 
+/// unless you want to be explicit about it.
+pub trait AcceptsConsiderationRegistrations {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 
@@ -169,7 +177,7 @@ pub trait StoresConsiderationRegistrations {
     ) -> &mut Self;
 }
 
-impl StoresConsiderationRegistrations for World {
+impl AcceptsConsiderationRegistrations for World {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 
@@ -191,7 +199,7 @@ impl StoresConsiderationRegistrations for World {
     }
 }
 
-impl StoresConsiderationRegistrations for &mut App {
+impl AcceptsConsiderationRegistrations for App {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 

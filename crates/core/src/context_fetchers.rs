@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
-use crate::actions::*;
-use crate::types::{self, ActionScore, ActionContext, AiEntity, PawnEntity};
+use crate::types::{self, ActionTemplate, ActionContext, AiEntity, PawnEntity};
 
 /// A Message representing a single request for a ContextFetcher call from the AI lib to user code. 
 /// 
@@ -80,21 +79,23 @@ pub type ContextFetcherInputs = bevy::prelude::In<(
     PawnEntity,
 )>;
 
+pub type ContextFetcherOutputs = Vec<ActionContext>;
+
 pub trait ContextFetcherSystem: bevy::ecs::system::ReadOnlySystem<
     In = ContextFetcherInputs, 
-    Out = ActionContext,
+    Out = ContextFetcherOutputs,
 > {}
 
 impl<
     ROS: bevy::ecs::system::ReadOnlySystem<
         In = ContextFetcherInputs, 
-        Out = ActionContext
+        Out = ContextFetcherOutputs,
     >
 > ContextFetcherSystem for ROS {}
 
 pub trait IntoContextFetcherSystem<Marker>: IntoSystem<
     ContextFetcherInputs, 
-    ActionScore, 
+    ContextFetcherOutputs, 
     Marker,
 > {}
 
@@ -103,7 +104,7 @@ impl<
     Marker, 
     IS: IntoSystem<
         ContextFetcherInputs,
-        ActionScore, 
+        ContextFetcherOutputs, 
         Marker,
         System = CS
     >
@@ -124,8 +125,14 @@ pub struct ContextFetcherKeyToSystemMap {
 }
 
 
-pub trait StoresContextFetcherRegistrations {
-    fn register_consideration<
+/// Something that allows us to register a ContextFetcher to the World. 
+/// 
+/// Note that for convenience, the first registration attempt 
+/// will initialize *an empty registry* if one does not exist yet, so
+/// you don't need to use `app.initialize_resource::<UtilityCurveRegistry>()` 
+/// unless you want to be explicit about it.
+pub trait AcceptsContextFetcherRegistrations {
+    fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
@@ -136,8 +143,8 @@ pub trait StoresContextFetcherRegistrations {
     ) -> &mut Self;
 }
 
-impl StoresContextFetcherRegistrations for World {
-    fn register_consideration<
+impl AcceptsContextFetcherRegistrations for World {
+    fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
@@ -158,8 +165,8 @@ impl StoresContextFetcherRegistrations for World {
     }
 }
 
-impl StoresContextFetcherRegistrations for &mut App {
-    fn register_consideration<
+impl AcceptsContextFetcherRegistrations for App {
+    fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
@@ -168,7 +175,7 @@ impl StoresContextFetcherRegistrations for &mut App {
         consideration: F, 
         key: types::ContextFetcherKey,
     ) -> &mut Self {
-        self.world_mut().register_consideration(consideration, key);
+        self.world_mut().register_context_fetcher(consideration, key);
         self
     }
 }

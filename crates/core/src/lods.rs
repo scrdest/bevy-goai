@@ -60,7 +60,7 @@ pub const LOD_MINIMAL: AiLodLevelPrimitive = AiLodLevelPrimitive::MAX - 1;   // 
 pub const LOD_INACTIVE: AiLodLevelPrimitive = AiLodLevelPrimitive::MAX;   // i.e. 255u8
 
 
-#[derive(Clone, Copy, bevy::reflect::Reflect)]
+#[derive(Clone, Copy, bevy::reflect::Reflect, Debug)]
 pub struct AiLevelOfDetailValue(AiLodLevelPrimitive);
 
 impl AiLevelOfDetailValue {

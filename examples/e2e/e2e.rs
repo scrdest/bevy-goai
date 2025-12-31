@@ -11,8 +11,8 @@ use bevy_cortex::action_state::ActionState;
 use bevy_cortex::actionset::ActionSet;
 use bevy_cortex::ai::AIController;
 use bevy_cortex::arg_values::ContextValue;
-use bevy_cortex::context_fetchers::{ContextFetcherRequest, ContextFetchResponse};
-use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, StoresConsiderationRegistrations};
+use bevy_cortex::context_fetchers::{ContextFetcherRequest, ContextFetchResponse, AcceptsContextFetcherRegistrations};
+use bevy_cortex::considerations::{BatchedConsiderationRequest, ConsiderationData, AcceptsConsiderationRegistrations};
 use bevy_cortex::decision_loop;
 use bevy_cortex::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
@@ -28,15 +28,6 @@ struct ExampleActionEvent{
 }
 
 impl ExampleActionEvent {
-    // fn from_context(context: ActionContext, action_tracker: Entity, state: Option<ActionState>) -> Self {
-    //     let wrapped_ctx = std::sync::Arc::new(context);
-    //     Self {
-    //         entity: action_tracker,
-    //         ctx: wrapped_ctx,
-    //         state: state.unwrap_or(ActionState::Ready),
-    //     }
-    // }
-
     fn from_context_ref(context: ActionContextRef, action_tracker: Entity, state: Option<ActionState>) -> Self {
         Self {
             entity: action_tracker,
@@ -107,15 +98,20 @@ fn example_action(
         .map(|bundle| &bundle.1.owner_ai)
     ;
 
+    let ai_owner = maybe_ai_owner
+        .map(|own| format!("{:}", own))
+        .unwrap_or("<none>".to_string())
+    ;
+
     let state = &event.state;
     let maybe_ctx = Some(&event.ctx);
 
     let json_state = serde_json::ser::to_string(&state);
     let state_name = json_state.unwrap();
-    bevy::log::info!("example_action for AI {:?}: Current state is {}", maybe_ai_owner, state_name);
+    bevy::log::info!("example_action for AI {:?}: Current state is {}", ai_owner, state_name);
 
     let self_name: Option<&String> = maybe_ctx.map(|ctx| ctx.get("this").unwrap().try_into().unwrap());
-    bevy::log::debug!("example_action for AI {:?}: Self name is {:?}", maybe_ai_owner, self_name);
+    bevy::log::debug!("example_action for AI {:?}: Self name is {:?}", ai_owner, self_name);
 
     let context_mapping = maybe_ctx.map(|ctx| ctx.get(&state_name)).flatten();
 
@@ -125,23 +121,25 @@ fn example_action(
             let clone_val = cv.clone();
             let cvstring: String = clone_val.try_into().unwrap();
             let unjsond = serde_json::de::from_str(&cvstring).unwrap();
-            bevy::log::debug!("example_action for AI {:?}: Current unjsond is {:?}", maybe_ai_owner, unjsond);
+            bevy::log::debug!("example_action for AI {:?}: Current unjsond is {:?}", ai_owner, unjsond);
             unjsond
         }
     }.unwrap();
 
-    bevy::log::info!("example_action for AI {:?}: New state is \"{:?}\"", maybe_ai_owner, new);
+    bevy::log::info!("example_action for AI {:?}: New state is \"{:?}\"", ai_owner, new);
 
     match maybe_tracker_state {
         Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
         Ok((upd_tracker, mut state)) => { 
-            bevy::log::debug!("example_action for AI {:?}: Updating the ActionTracker {:?} state to new value {:?}", maybe_ai_owner, upd_tracker, new);
+            bevy::log::debug!("example_action for AI {:?}: Updating the ActionTracker {:?} state to new value {:?}", ai_owner, upd_tracker, new);
             state.set_state(new);
         },
     }
 }
 
-fn example_context_fetcher() -> Vec<crate::actions::ActionContext> {
+fn example_context_fetcher(
+    _inp: crate::types::ContextFetcherInputs
+) -> crate::types::ContextFetcherOutputs {
     let mut context: HashMap<String, ContextValue> = HashMap::with_capacity(3);
     // As an artifact of how we use JSON serde, we need to add escaped quotes around strings here.
     context.insert("\"Ready\"".to_string(), "\"Running\"".to_string().into());
@@ -213,34 +211,6 @@ fn setup_default_action_tracker_config(
         .set_use_timers(false)
     ;
     config_res.config = Some(new_config.build());
-}
-
-fn example_context_fetcher_system(
-    mut requests: MessageReader<ContextFetcherRequest>,
-    mut responses: MessageWriter<ContextFetchResponse>,
-) {
-    // We'll return the same generic, single-option Context for all requests for now.
-    // In a real scenario, this should dispatch to different user systems.
-
-    let mut context: HashMap<String, ContextValue> = HashMap::with_capacity(3);
-    // As an artifact of how we use JSON serde, we need to add escaped quotes around strings here.
-    context.insert("\"Ready\"".to_string(), "\"Running\"".to_string().into());
-    context.insert("\"Running\"".to_string(), "\"Failed\"".to_string().into());
-    context.insert("\"Failed\"".to_string(), "\"Failed\"".to_string().into());
-    context.insert("this".to_string(), EXAMPLE_CONTEXT_FETCHER_NAME.to_string().into());
-
-    let context = std::sync::Arc::new(context);
-    let context = Vec::from([context]);
-    
-    for req in requests.read() {
-        bevy::log::debug!("Responding to request {:?}", req);
-
-        responses.write(ContextFetchResponse::new(
-            req.action_template.to_owned(),
-            context.to_owned(),
-            req.audience.to_owned(),
-        ));
-    }
 }
 
 /// Helper for triggering AppExit. 
@@ -329,10 +299,10 @@ fn main() {
     .init_resource::<DespawnedAnyActionTrackers>()
     .register_consideration(example_consideration_one, "One".into())
     .register_consideration(example_consideration_two, "Two".into())
+    .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME.to_string().into())
     .add_message::<ContextFetcherRequest>()
     .add_message::<ContextFetchResponse>()
     .add_message::<BatchedConsiderationRequest>()
-    .register_function_with_name(EXAMPLE_CONTEXT_FETCHER_NAME, example_context_fetcher)
     .add_systems(Startup, (
         setup_example_entity, 
         setup_default_action_tracker_config,
@@ -340,13 +310,10 @@ fn main() {
     .add_observer(create_tracker_for_picked_action)
     .add_observer(actiontracker_spawn_requested)
     .add_observer(actiontracker_despawn_requested)
-    .add_observer(decision_loop::ai_action_gather_phase)
+    .add_observer(decision_loop::decision_engine)
     .add_observer(example_action)
     .add_observer(mark_despawn_occurred)
     .add_systems(FixedUpdate, (
-        example_context_fetcher_system,
-        decision_loop::ai_action_prescoring_phase,
-        decision_loop::ai_action_scoring_phase,
         example_action_tracker_handler,
     ).chain())
     .add_systems(

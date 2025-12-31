@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 /// 
 pub type ContextFetcherKey = crate::utility_concepts::ContextFetcherIdentifier;
+pub type UtilityCurveKey = String;
 
 /// Type alias to make it easier to switch out what datatypes are used for Actions. 
 /// Action Keys are effectively IDs, so they do not need to be human-readable.
@@ -26,10 +27,12 @@ pub type AiEntity = bevy::prelude::Entity;
 pub type PawnEntity = bevy::prelude::Entity;
 
 pub use crate::context_fetchers::ContextFetcherInputs;
+pub use crate::context_fetchers::ContextFetcherOutputs;
 pub use crate::context_fetchers::ContextFetcherSystem;
 pub use crate::context_fetchers::IntoContextFetcherSystem;
 
 pub use crate::considerations::ConsiderationInputs;
+pub use crate::considerations::ConsiderationOutputs;
 pub use crate::considerations::ConsiderationSystem;
 pub use crate::considerations::IntoConsiderationSystem;
 
