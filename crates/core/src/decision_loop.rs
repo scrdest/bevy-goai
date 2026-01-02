@@ -2,15 +2,15 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use bevy::prelude::*;
 use crate::ai::{AIController};
-use crate::context_fetchers::{ContextFetcherKeyToSystemMap};
-use crate::considerations::{ConsiderationKeyToSystemMap};
+use crate::context_fetchers::{ContextFetcherKeyToSystemMap, ShouldReinitCfQueries};
+use crate::considerations::{ConsiderationKeyToSystemMap, ShouldReinitConsiderationQueries};
 use crate::curves::{SupportedUtilityCurve, UtilityCurve, UtilityCurveRegistry, resolve_curve_from_name};
 use crate::errors::NoCurveMatchStrategyConfig;
-use crate::events::AiDecisionRequested;
+use crate::events::{AiActionPicked, AiDecisionInitiated, AiDecisionRequested, SomeAiDecisionProcessed};
 use crate::lods::{AiLevelOfDetail};
+use crate::pawn::Pawn;
 use crate::smart_object::ActionSetStore;
 use crate::types::{self, ActionContextRef, ActionScore, ActionTemplateRef};
-
 
 /// Correction formula as per the GDC 2015 "Building a Better Centaur AI" 
 /// presentation by Dave Mark and Mike Lewis.
@@ -74,6 +74,46 @@ fn consideration_adjustment(
 }
 
 
+/// A helper Observer that handles the setup for a Decision.
+pub fn prepare_ai(
+    event: On<AiDecisionRequested>,
+    should_reinit_cf_queries: Option<ResMut<ShouldReinitCfQueries>>,
+    should_reinit_cons_queries: Option<ResMut<ShouldReinitConsiderationQueries>>,
+    mut commands: Commands,
+) {
+    should_reinit_cf_queries.map(|mut res| {
+        res.set(true);
+    });
+
+    should_reinit_cons_queries.map(|mut res| {
+        res.set(true);
+    });
+    
+    commands.trigger(AiDecisionInitiated {
+        entity: event.entity,
+        smart_objects: event.smart_objects.clone(),
+    });
+}
+
+pub fn disable_cf_reinit(
+    _event: On<crate::events::SomeAiDecisionProcessed>,
+    should_reinit_cf_queries: Option<ResMut<ShouldReinitCfQueries>>,
+) {
+    should_reinit_cf_queries.map(|mut res| {
+        res.set(false);
+    });
+}
+
+pub fn disable_consideration_reinit(
+    _event: On<crate::events::SomeAiDecisionProcessed>,
+    should_reinit_cons_queries: Option<ResMut<ShouldReinitConsiderationQueries>>,
+) {
+    should_reinit_cons_queries.map(|mut res| {
+        res.set(false);
+    });
+}
+
+
 /// Core AI decision loop. 
 /// 
 /// Finds the `Action` with the highest Utility Score and triggers an `ActionPickedEvent`.
@@ -106,17 +146,23 @@ fn consideration_adjustment(
 /// using a couple of custom Resources provided by Cortex; see `app.register_consideration()`, 
 /// `app.register_context_fetcher()` and `app.register_utility_curve()` for API details.
 pub fn decision_engine(
-    event: On<AiDecisionRequested>,
+    event: On<AiDecisionInitiated>,
     world_ref: &World, 
     actionset_store: Res<ActionSetStore>,
     context_fetcher_system_map: Res<ContextFetcherKeyToSystemMap>,
     consideration_system_map: Res<ConsiderationKeyToSystemMap>,
     entity_checker: Query<Entity, With<AIController>>, 
     lod_query: Query<Option<&AiLevelOfDetail>>, 
+    pawn_query: Query<Option<&Pawn>>,
     utility_curve_registry: Option<Res<UtilityCurveRegistry>>,
     no_match_strategy_config: Option<Res<NoCurveMatchStrategyConfig>>,
     mut commands: Commands,
 ) {
+    // Marks that SOMEONE has done some AI processing in this world-loop tick. 
+    // This is currently mainly used to disable unnecessary duplicate reinits 
+    // until the next time some AI decides to run and will actually use them.
+    commands.trigger(SomeAiDecisionProcessed);
+
     let audience = event.event_target();
 
     let exist_check = entity_checker.get(audience);
@@ -155,6 +201,7 @@ pub fn decision_engine(
     >::new();
     
     let maybe_smartobjects = &event.smart_objects;
+    let maybe_pawn = pawn_query.get(audience).ok().flatten().cloned();
     
     // 1. Gather ActionSets from Smart Objects
     let smartobjects = match maybe_smartobjects {
@@ -196,22 +243,23 @@ pub fn decision_engine(
             continue;
         }
 
-        bevy::log::debug!("decision_engine: AI {:?} - requesting Contexts for Template {:?}", &audience, &action_template.name);
+        bevy::log::debug!(
+            "decision_engine: AI {:?} - requesting Contexts for Template {:?} from CF {:?}", 
+            &audience, &action_template.name, &action_template.context_fetcher_name,
+        );
         
         // Request Contexts using registered ContextFetcher Systems
         let cf_system = context_fetcher_system_map.mapping
             .get(&action_template.context_fetcher_name.0)
-            .cloned()
         ;
-        
+
         let contexts = match cf_system {
             Some(system_guard) => {
                 let res = system_guard.write().map(|mut cf_system| {
                     cf_system.run_readonly(
                         (
                             audience,
-                            // TODO: FIX TO PAWN!
-                            audience,
+                            maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
                         ),
                         world_ref,
                     )
@@ -254,7 +302,7 @@ pub fn decision_engine(
         };
 
         for ctx in contexts {
-            let ctx_ref = std::sync::Arc::new(ctx);
+            let ctx_ref = ctx;
             
             bevy::log::debug!("decision_engine: AI {:?} - processing Ctx {:?} for Action {:?}", 
                 &audience,
@@ -485,11 +533,11 @@ pub fn decision_engine(
                         // as it will not get picked anyway.
                         if curr_template_best >= curr_score {
                             bevy::log::debug!(
-                                "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - score {:?} is below the template best of {:?}, discarding the Context.",
+                                "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - curr_score {:?} is below the template best of {:?}, discarding the Context.",
                                 audience,
                                 cons.func_name,
                                 &action_template.name,
-                                score,
+                                curr_score,
                                 curr_template_best,
                             );
                             break;
@@ -542,13 +590,14 @@ pub fn decision_engine(
             }
         }
     }
-
+    
     match best_scoring_triple {
         None => {
             bevy::log::info!(
                 "decision_engine: AI {:?} - no suitable Actions found.",
                 &audience,
-            )
+            );
+            panic!("decision_engine: AI {:?} - no suitable Actions found.", audience)
         }
         Some(best_tuple) => {
             let (
@@ -564,7 +613,7 @@ pub fn decision_engine(
                 &best_score,
             );
 
-            let pick_evt = crate::events::AiActionPicked {
+            let pick_evt = AiActionPicked {
                 entity: audience.entity(),
                 action_key: best_template.action_key.to_owned(),
                 action_name: best_template.name.to_owned(),

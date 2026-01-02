@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
-use crate::types::{self, ActionContext, AiEntity, PawnEntity};
+use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
 
 
 /// Convenience type-alias for generic inputs piped into each ContextFetcher. 
@@ -26,7 +26,7 @@ use crate::types::{self, ActionContext, AiEntity, PawnEntity};
 /// retrieval of data about them in your custom Queries (using `Query::get()`). 
 pub type ContextFetcherInputs = bevy::prelude::In<(
     AiEntity, 
-    PawnEntity,
+    PawnEntityRef,
 )>;
 
 /// Convenience type-alias for the output type required from a ContextFetcher System. 
@@ -98,7 +98,7 @@ pub trait AcceptsContextFetcherRegistrations {
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
-        consideration: F, 
+        context_fetcher: F, 
         key: types::ContextFetcherKey,
     ) -> &mut Self;
 }
@@ -110,11 +110,10 @@ impl AcceptsContextFetcherRegistrations for World {
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
-        consideration: F, 
+        context_fetcher: F, 
         key: types::ContextFetcherKey,
     ) -> &mut Self {
-        let mut system = F::into_system(consideration);
-        system.initialize(self);
+        let system = F::into_system(context_fetcher);
         let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();
         system_registry.mapping.insert(
             key, 
@@ -132,11 +131,88 @@ impl AcceptsContextFetcherRegistrations for App {
         F: IntoContextFetcherSystem<Marker, System = CS> + 'static
     >(
         &mut self, 
-        consideration: F, 
+        context_fetcher: F, 
         key: types::ContextFetcherKey,
     ) -> &mut Self {
-        self.world_mut().register_context_fetcher(consideration, key);
+        self.world_mut().register_context_fetcher(context_fetcher, key);
         self
     }
 }
 
+#[derive(Resource, Debug)]
+pub struct ShouldReinitCfQueries(bool);
+
+impl ShouldReinitCfQueries {
+    pub fn get(&self) -> bool {
+        self.0
+    }
+
+    pub fn set(&mut self, val: bool) {
+        self.0 = val;
+    }
+}
+
+impl Default for ShouldReinitCfQueries {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+pub fn reinit_cf_queries(world: &mut World) {
+    let world_cell = world.as_unsafe_world_cell();
+
+    // SAFETY: This is an Exclusive System, so we are the only one with World access.
+    //         We only really need this to bypass a silly borrow-check on the reference.
+    let should_reinit_res = unsafe {
+        world_cell.get_resource::<ShouldReinitCfQueries>()
+    };
+
+    let should_reinit = match should_reinit_res {
+        None => true, 
+        Some(reinit_mark) => reinit_mark.get()
+    };
+
+    if !should_reinit { 
+        return 
+    };
+
+    // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+    //         and we are the only ones with a lock on the initialized System.
+    //         We only really need this to bypass a silly borrow-check on the reference.
+    let registry = unsafe { 
+        world_cell.get_resource_mut::<ContextFetcherKeyToSystemMap>() 
+    };
+
+    let mut registry = match registry {
+        None => return,
+        Some(r) => r,
+    };
+
+    registry.mapping.iter_mut().for_each(|(key, system_lock)| {
+        match system_lock.write() {
+            Ok(mut system) => {
+                // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+                //         and we are the only ones with a lock on the initialized System.
+                //         We only really need this to bypass a silly borrow-check on &muts.
+                bevy::log::debug!("reinit_cf_queries: Reinitializing System {:?}", key);
+                system.initialize(unsafe { world_cell.world_mut() });
+            },
+            Err(e) => panic!("{:?}", e)
+        }
+    });
+}
+
+pub struct ContextFetcherPlugin;
+
+impl Plugin for ContextFetcherPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            // Technically unnecessary, but will give users saner error messages if we pre-initialize:
+            .init_resource::<ShouldReinitCfQueries>()
+            .init_resource::<ContextFetcherKeyToSystemMap>()
+            .add_systems(Startup, reinit_cf_queries)
+            .add_systems(FixedFirst, reinit_cf_queries)
+            .add_observer(crate::decision_loop::disable_consideration_reinit)
+        ;
+    }
+}

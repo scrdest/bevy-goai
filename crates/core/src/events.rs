@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 // use bevy::reflect::{FromType, Reflect};
-use crate::actions::ActionContext;
-
+use crate::{actions::ActionContext, types};
 
 /// An Event that signals the decision engine picked the new best Action
 /// for a specific AI Entity and provides details about it (abstract ID, 
@@ -49,7 +48,7 @@ impl AiActionPicked {
             action_name
         );
 
-        let wrapped_ctx = std::sync::Arc::new(action_context);
+        let wrapped_ctx = action_context;
 
         Self {
             entity: ai_owner,
@@ -61,6 +60,12 @@ impl AiActionPicked {
     }
 }
 
+/// A more general signal than AiActionPicked - simply signals that SOME AI has 
+/// done some processing. This is used to optimize query reinitializations - as 
+/// they are currently all-or-nothing, if one AI handled the reinit, they all did.
+#[derive(Event, Debug)]
+pub struct SomeAiDecisionProcessed;
+
 
 /// Supporting Event for triggering a decision_process() for an AI.
 /// Raised whenever an active AI starts a tick without an Action.
@@ -69,7 +74,19 @@ impl AiActionPicked {
 /// or you are likely running the same calculation multiple times.
 #[derive(EntityEvent)]
 pub struct AiDecisionRequested {
-    pub entity: Entity,
+    pub entity: types::AiEntity,
+    pub smart_objects: Option<crate::smart_object::SmartObjects>,
+}
+
+
+/// Supporting Event for triggering a decision_process() for an AI.
+/// Raised when AiDecisionRequested has finished preparing the AI.
+/// 
+/// Should generally NOT be raised more than once per Entity per tick 
+/// or you are likely running the same calculation multiple times.
+#[derive(EntityEvent)]
+pub struct AiDecisionInitiated {
+    pub entity: types::AiEntity,
     pub smart_objects: Option<crate::smart_object::SmartObjects>,
 }
 
@@ -80,6 +97,12 @@ mod tests {
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use super::*;
     use crate::ai::AIController;
+
+    #[derive(Component)]
+    struct TestContextData {
+        _foo: u8,
+        _bar: i8,
+    }
 
     #[derive(Debug, Default, Event)]
     struct TestActionEvent;
@@ -93,11 +116,12 @@ mod tests {
 
         let entity = entity_cmds.id();
 
-        let mut ctx2 = ActionContext::new();
-        ctx2.insert("foo".into(), 1.into());
-        ctx2.insert("bar".into(), 2.into());
-
-        let ctx2 = std::sync::Arc::new(ctx2);
+        let ctx2 = commands.spawn(
+            TestContextData {
+                _foo: 1,
+                _bar: 2,
+            }
+        ).id();
 
         commands.trigger(AiActionPicked {
             action_name: "TestAction".into(),

@@ -19,12 +19,13 @@ pub type ActionTemplate = crate::actions::ActionTemplate;
 pub type ActionTemplateRef = Arc<ActionTemplate>;
 
 pub type ActionContext = crate::actions::ActionContext;
-pub type ActionContextRef = Arc<ActionContext>;
+pub type ActionContextRef = ActionContext; // currently Entity, which is Copy and serves as a reference copied.
 pub type ActionContextList = Vec<ActionContextRef>;
 
 // Type aliases - to express intent better.
 pub type AiEntity = bevy::prelude::Entity;
 pub type PawnEntity = bevy::prelude::Entity;
+pub type PawnEntityRef = Option<PawnEntity>;
 
 pub use crate::context_fetchers::ContextFetcherInputs;
 pub use crate::context_fetchers::ContextFetcherOutputs;
@@ -35,6 +36,11 @@ pub use crate::considerations::ConsiderationInputs;
 pub use crate::considerations::ConsiderationOutputs;
 pub use crate::considerations::ConsiderationSystem;
 pub use crate::considerations::IntoConsiderationSystem;
+
+pub type SmartObject = String;
+
+pub type ActionSetRef = SmartObject;
+pub type ActionSetsRef = Arc<Vec<ActionSetRef>>;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
 

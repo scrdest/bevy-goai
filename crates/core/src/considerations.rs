@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::types::{self, ActionScore, ActionContext, AiEntity, PawnEntity};
+use crate::types::{self, ActionContextRef, ActionScore, AiEntity, PawnEntity};
 use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 
 
@@ -59,7 +59,7 @@ impl ConsiderationData {
 pub type ConsiderationInputs = bevy::prelude::In<(
     AiEntity, 
     PawnEntity,
-    Arc<ActionContext>, 
+    ActionContextRef, 
 )>;
 
 /// Convenience type-alias for the output type a Consideration must return.
@@ -129,7 +129,7 @@ pub struct ConsiderationKeyToSystemMap {
 }
 
 
-/// Something that allows us to register a ContextFetcher to the World. 
+/// Something that allows us to register a Consideration to the World. 
 /// 
 /// Note that for convenience, the first registration attempt 
 /// will initialize *an empty registry* if one does not exist yet, so
@@ -181,5 +181,83 @@ impl AcceptsConsiderationRegistrations for App {
     ) -> &mut Self {
         self.world_mut().register_consideration(consideration, key);
         self
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct ShouldReinitConsiderationQueries(bool);
+
+impl ShouldReinitConsiderationQueries {
+    pub fn get(&self) -> bool {
+        self.0
+    }
+
+    pub fn set(&mut self, val: bool) {
+        self.0 = val;
+    }
+}
+
+impl Default for ShouldReinitConsiderationQueries {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+pub fn reinit_consideration_queries(world: &mut World) {
+    let world_cell = world.as_unsafe_world_cell();
+
+    // SAFETY: This is an Exclusive System, so we are the only one with World access.
+    //         We only really need this to bypass a silly borrow-check on the reference.
+    let should_reinit_res = unsafe {
+        world_cell.get_resource::<ShouldReinitConsiderationQueries>()
+    };
+
+    let should_reinit = match should_reinit_res {
+        None => true, 
+        Some(reinit_mark) => reinit_mark.get()
+    };
+
+    if !should_reinit { 
+        return 
+    };
+
+    // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+    //         and we are the only ones with a lock on the initialized System.
+    //         We only really need this to bypass a silly borrow-check on the reference.
+    let registry = unsafe { 
+        world_cell.get_resource_mut::<ConsiderationKeyToSystemMap>() 
+    };
+
+    let mut registry = match registry {
+        None => return,
+        Some(r) => r,
+    };
+
+    registry.mapping.iter_mut().for_each(|(key, system_lock)| {
+        match system_lock.write() {
+            Ok(mut system) => {
+                // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+                //         and we are the only ones with a lock on the initialized System.
+                //         We only really need this to bypass a silly borrow-check on &muts.
+                bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+                system.initialize(unsafe { world_cell.world_mut() });
+            },
+            Err(e) => panic!("{:?}", e)
+        }
+    });
+}
+
+pub struct ConsiderationPlugin;
+
+impl Plugin for ConsiderationPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            // Technically unnecessary, but will give users saner error messages if we pre-initialize:
+            .init_resource::<ShouldReinitConsiderationQueries>()
+            .init_resource::<ConsiderationKeyToSystemMap>()
+            .add_systems(Startup, reinit_consideration_queries)
+            .add_systems(FixedFirst, reinit_consideration_queries)
+            .add_observer(crate::decision_loop::disable_cf_reinit)
+        ;
     }
 }

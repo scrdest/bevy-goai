@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// - Terminal States should never change at all once reached, 
 /// - Progressed states should only become Terminal or different Progressed States, and
 /// - Initial states can become any other State.
-#[derive(Reflect, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Reflect, Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum ActionState {
     // Note that we are NOT implementing Default for this on purpose; 
     // the default state is domain-specific (though probably just Ready most of the time).

@@ -25,18 +25,15 @@
 //! 
 //! This is the core problem AI solves - given all ActionTemplates and all Contexts 
 //! available for them at a given moment, which combination to choose for execution?
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use bevy::reflect::{Reflect};
 use serde::{Serialize, Deserialize};
 
-use crate::arg_values::ContextValue;
 use crate::considerations::ConsiderationData;
 use crate::types::{self, ActionContextRef};
 use crate::utility_concepts::{ContextFetcherIdentifier};
 
-pub type ActionContext = HashMap<String, ContextValue>;
+pub type ActionContext = Entity;
 
 /// An Action is effectively an ActionTemplate + a selected ActionContext. 
 #[derive(Clone, Reflect, Debug)]

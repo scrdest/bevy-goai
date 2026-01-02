@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use crate::actionset::ActionSet;
+use crate::types;
 
 // The overall design looks like this:
 // 1) Each AI has 0+ (though practically speaking 1+) SmartObjects associated with it at a given moment.
@@ -33,7 +34,8 @@ pub struct ActionSetStore {
 }
 
 
-#[derive(Component, Default, Reflect)]
+/// A collection of all SmartObjects an Entity has access to at the moment.
+#[derive(Component, Default, Reflect, Clone)]
 pub struct SmartObjects {
-    pub actionset_refs: Vec<String>
+    pub actionset_refs: types::ActionSetsRef
 }
