@@ -134,19 +134,50 @@ In either case, you will nearly always need to tailor three things to your needs
 2) Considerations 
 3) Actions
 
+
+#### ContextFetchers 
+
 `ContextFetchers` are Bevy Systems - for non-Bevy users, this means they are mostly straightforward 
 Rust functions, except for being able to make Queries (fast lookups of Entities and their Components 
 in the ECS World `Cortex` is running in).
 
+`ContextFetchers` receive some pre-defined inputs (normal function parameters whose types are 
+wrapped in Bevy's `In<T>` wrappers) to provide the necessary metadata to power your Queries.
 
-`Considerations` are, like `ContextFetchers`, also Bevy Systems, additionally taking 
-some predefined inputs (normal function parameters whose types are wrapped in Bevy's 
-`In<T>` wrappers) to provide the necessary metadata to power the Queries.
+`ContextFetchers` should be *strictly read-only* and should return 
+lists of Entities that represent possible targets for Actions. 
+
+For example, to eat an apple, a `ContextFetcher` for the `Eat` Action should return every 
+Entity that has an IsApple Component (possibly within some radius, or un-owned, or any other 
+extra logic you want the AI to account for - up to you).
+
+You can think of a `ContextFetcher` as a simple **filter** - they trim down all the Entities 
+in the World to just those that make sense for the Actions they work for.
+
+Once you're done building your `ContextFetchers`, you can register them to the World easily 
+using either the classic App Builder-style `app.register_context_fetcher(func, key)` or on 
+the World directly using `world.register_context_fetcher(func, key)`. 
+
+Rust's type system will stop you from registering a `ContextFetcher` if there is something 
+wrong with the function you have built. 
+
+If you cannot see the function, check your imports. 
+If you have trouble with the key argument, you can just call 
+`.into()` on your string key (since Cortex uses a wrapper type around raw string types).
+
+
+#### Considerations 
+
+`Considerations` are, like `ContextFetchers`, also Bevy Systems.
+They also take predefined inputs to help you build Queries in them 
+(including a Context returned from the `ContextFetcher`).
 
 `Considerations` should look up some quantifiable data about the world and return it 
-as a floating-point number. For example, if the `Context` is an enemy unit, we may
-return its Health, or its Distance to our Pawn, as raw numbers or as percentage, 
-whatever - as long as it's a floating-point number. 
+as a floating-point number. 
+
+For example, if the `Context` is an enemy unit, we may return its Health, or its 
+Distance to our Pawn, and do it as either raw numbers, or as percentage, or 
+whatever - as long as it's a floating-point number, it's valid. 
 
 Once you're done building your Consideration(s), you can register them easily using 
 either the classic App Builder-style `app.register_consideration(func, key)` or on 
@@ -156,5 +187,7 @@ Rust's type system will stop you from registering a Consideration if there is so
 wrong with the function you have built. 
 
 If you cannot see the function, check your imports. 
-If you have trouble with the key argument, you can just call `.into()` on your string key 
-(since Cortex uses a wrapper type around raw string types).
+If you have trouble with the key argument, you can just call 
+`.into()` on your string key (since Cortex uses a wrapper type around raw string types).
+
+

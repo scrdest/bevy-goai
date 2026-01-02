@@ -1,11 +1,24 @@
+//! Identifiers for key types.
+//! 
+//! These are, broadly speaking, simple newtype wrappers whose main purpose is to 
+//! future-proof the library and allow for the implementations of assorted Traits 
+//! that will not 'leak' into the underlying, wrapped type.
+//! 
+//! Barring exceptional circumstances, all identifiers will be cheap and easy to 
+//! convert into at least a reference to their respective underlying types.
+
 use std::borrow::Borrow;
+
 use bevy::prelude::*;
 use bevy::reflect::{Reflect};
+
+#[cfg(any(feature = "actionset_loader"))]
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Reflect, Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
+#[cfg_attr(any(feature = "actionset_loader"), serde(transparent))]
 pub struct ContextFetcherIdentifier(pub String);
 
 impl ContextFetcherIdentifier {
@@ -45,8 +58,9 @@ impl Borrow<String> for &ContextFetcherIdentifier {
 }
 
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Reflect, Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
+#[cfg_attr(any(feature = "actionset_loader"), serde(transparent))]
 pub struct CurveIdentifier(String);
 
 impl CurveIdentifier {
@@ -86,8 +100,9 @@ impl Borrow<String> for &CurveIdentifier {
 }
 
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Reflect, Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
+#[cfg_attr(any(feature = "actionset_loader"), serde(transparent))]
 pub struct ConsiderationIdentifier(String);
 
 
@@ -113,13 +128,4 @@ impl std::fmt::Display for ConsiderationIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
-}
-
-
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
-struct ConsiderationAsset {
-    min: f32,
-    max: f32,
-    function: ConsiderationIdentifier, 
-    curve: CurveIdentifier, 
 }

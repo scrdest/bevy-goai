@@ -2,17 +2,19 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
-use serde::{Serialize, Deserialize};
 use crate::types::{self, ActionContextRef, ActionScore, AiEntity, PawnEntity};
-use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
+use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 
+#[cfg(any(feature = "actionset_loader"))]
+use serde::{Serialize, Deserialize};
 
-#[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug, Reflect)]
+#[cfg_attr(feature = "actionset_loader", derive(Serialize, Deserialize))]
 pub struct ConsiderationData {
-    #[serde(rename="consideration")]
+    #[cfg_attr(any(feature = "actionset_loader"), serde(rename="consideration"))]
     pub consideration_name: ConsiderationIdentifier,
 
-    #[serde(rename="curve")]
+    #[cfg_attr(any(feature = "actionset_loader"), serde(rename="curve"))]
     pub curve_name: CurveIdentifier,
 
     pub min: types::ActionScore,

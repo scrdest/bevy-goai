@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
+
 use bevy::prelude::*;
+
 use crate::ai::{AIController};
 use crate::context_fetchers::{ContextFetcherKeyToSystemMap, ShouldReinitCfQueries};
 use crate::considerations::{ConsiderationKeyToSystemMap, ShouldReinitConsiderationQueries};
@@ -10,7 +12,7 @@ use crate::events::{AiActionPicked, AiDecisionInitiated, AiDecisionRequested, So
 use crate::lods::{AiLevelOfDetail};
 use crate::pawn::Pawn;
 use crate::smart_object::ActionSetStore;
-use crate::types::{self, ActionContextRef, ActionScore, ActionTemplateRef};
+use crate::types::{self, ActionContextRef, ActionScore, ActionTemplateRef, ThreadSafeRef};
 
 /// Correction formula as per the GDC 2015 "Building a Better Centaur AI" 
 /// presentation by Dave Mark and Mike Lewis.
@@ -225,7 +227,7 @@ pub fn decision_engine(
         acts.actions
         .iter()
         .cloned()
-        .map(|act| std::sync::Arc::new(act))
+        .map(|act| ThreadSafeRef::new(act))
     });
 
     bevy::log::debug!(

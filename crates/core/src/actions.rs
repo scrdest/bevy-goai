@@ -26,12 +26,14 @@
 //! This is the core problem AI solves - given all ActionTemplates and all Contexts 
 //! available for them at a given moment, which combination to choose for execution?
 use bevy::prelude::*;
-use bevy::reflect::{Reflect};
+use bevy::reflect::Reflect;
+
+#[cfg(any(feature = "actionset_loader"))]
 use serde::{Serialize, Deserialize};
 
 use crate::considerations::ConsiderationData;
 use crate::types::{self, ActionContextRef};
-use crate::utility_concepts::{ContextFetcherIdentifier};
+use crate::identifiers::{ContextFetcherIdentifier};
 
 pub type ActionContext = Entity;
 
@@ -64,7 +66,8 @@ pub struct ScoredAction {
 /// 2) a String key identifying a System that returns possible Contexts (e.g. 'GetAdjacentDoors').
 /// 3) a sequence of Consideration System String keys that will be used to score all of these (e.g. ['DistanceToPawn']).
 /// 4) a Priority multiplier for the final score to make certain activities intrinsically higher priority (e.g. 1.5).
-#[derive(Reflect, Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Reflect)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
 pub struct ActionTemplate {
     // 
     // name = identifier. Two ActionTemplates may share the same function (as an implementation detail), 
@@ -74,7 +77,7 @@ pub struct ActionTemplate {
     pub name: String, 
 
     /// 
-    #[serde(rename="context_fetcher")]
+    #[cfg_attr(any(feature = "actionset_loader"), serde(rename="context_fetcher"))]
     pub context_fetcher_name: ContextFetcherIdentifier,
     pub considerations: Vec<ConsiderationData>,
     pub priority: types::ActionScore,

@@ -333,11 +333,9 @@ name = "bevy-cortex"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "cortex-actionset-loader",
  "cortex-bevy-plugin",
  "cortex-core",
- "serde",
- "serde_json",
- "serde_yaml",
 ]
 
 [[package]]
@@ -1920,6 +1918,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-actionset-loader"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cortex-core",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "cortex-bevy-plugin"
 version = "0.1.0"
 dependencies = [
@@ -1932,10 +1941,7 @@ name = "cortex-core"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "rand",
  "serde",
- "serde_json",
- "serde_yaml",
 ]
 
 [[package]]

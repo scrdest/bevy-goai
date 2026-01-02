@@ -10,14 +10,49 @@ members = [
 #   "examples/*"
 ]
 
-
 [dependencies]
-bevy = { version = "0.17.3", features = ["dynamic_linking", "serialize"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.148"
-serde_yaml = "0.9.34"
+bevy = { version = "0.17.3", features = ["dynamic_linking"] }
 cortex-core = {path = "crates/core"}
-cortex-bevy-plugin = {path = "crates/bevy_plugin"}
+cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = true}
+cortex-actionset-loader = {path = "crates/actionset_loader", optional = true}
+
+[features]
+default = [
+  "bevy_plugin",
+]
+
+# Provides a way to load ActionSets as Assets from the filesystem.
+actionset_loader = [
+  "cortex-actionset-loader",
+]
+
+# Everything needed for an 'AI Server' setup of Cortex (i.e. using Cortex as a separate ECS world)
+ai_server = [
+  
+]
+
+# Provides a plugin that sets up most of the basic integration for a 'Bevy-native' setup.
+bevy_plugin = [
+  "cortex-bevy-plugin"
+]
+
+# Everything needed for a 'Bevy-native' setup (i.e. running Cortex as a Plugin in a Bevy app)
+bevy_native = [
+  "bevy_plugin"
+]
+
+# Everything needed to run tests.
+testing = [
+  "cortex-bevy-plugin"
+]
+
+all = [
+  "actionset_loader",
+  "ai_server",
+  "bevy_plugin",
+  "bevy_native",
+  "testing",
+]
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

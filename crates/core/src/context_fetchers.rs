@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
 use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
-use crate::utility_concepts::ContextFetcherIdentifier;
+use crate::identifiers::ContextFetcherIdentifier;
 
 
 /// Convenience type-alias for generic inputs piped into each ContextFetcher. 

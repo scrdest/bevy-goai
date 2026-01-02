@@ -11,9 +11,9 @@ use bevy_cortex::ai::AIController;
 use bevy_cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
 use bevy_cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
 use bevy_cortex::events;
-use bevy_cortex::types::{self, ActionContextRef, ActionScore};
+use bevy_cortex::types::{self, ActionContextRef, ActionScore, ThreadSafeRef};
 use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
-use bevy_cortex::CortexPlugin;
+use bevy_cortex::prelude::CortexPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
@@ -232,7 +232,7 @@ fn setup_example_entity(
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
-        actionset_refs: std::sync::Arc::new(Vec::from(["ExampleActionSet".to_string()]))
+        actionset_refs: ThreadSafeRef::new(Vec::from(["ExampleActionSet".to_string()]))
     };
 
     let spawned = commands.spawn((

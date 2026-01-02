@@ -1,4 +1,6 @@
 use bevy::reflect::Reflect;
+
+#[cfg(any(feature = "actionset_loader"))]
 use serde::{Deserialize, Serialize};
 
 /// A lifecycle marker for ActionTrackers to indicate what the status of the tracked Action is. 
@@ -12,7 +14,8 @@ use serde::{Deserialize, Serialize};
 /// - Terminal States should never change at all once reached, 
 /// - Progressed states should only become Terminal or different Progressed States, and
 /// - Initial states can become any other State.
-#[derive(Reflect, Serialize, Deserialize, Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Reflect)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
 pub enum ActionState {
     // Note that we are NOT implementing Default for this on purpose; 
     // the default state is domain-specific (though probably just Ready most of the time).
