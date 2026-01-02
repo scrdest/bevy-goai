@@ -8,10 +8,15 @@ use serde::{Serialize, Deserialize};
 #[serde(transparent)]
 pub struct ContextFetcherIdentifier(pub String);
 
-
-impl From<String> for ContextFetcherIdentifier {
-    fn from(value: String) -> Self {
+impl ContextFetcherIdentifier {
+    pub fn from_string(value: String) -> Self {
         Self(value)
+    }
+}
+
+impl<IS: Into<String>> From<IS> for ContextFetcherIdentifier {
+    fn from(value: IS) -> Self {
+        Self::from_string(value.into())
     }
 }
 
@@ -44,9 +49,15 @@ impl Borrow<String> for &ContextFetcherIdentifier {
 #[serde(transparent)]
 pub struct CurveIdentifier(String);
 
-impl From<String> for CurveIdentifier {
-    fn from(value: String) -> Self {
+impl CurveIdentifier {
+    pub fn from_string(value: String) -> Self {
         Self(value)
+    }
+}
+
+impl<IS: Into<String>> From<IS> for CurveIdentifier {
+    fn from(value: IS) -> Self {
+        Self::from_string(value.into())
     }
 }
 
@@ -80,15 +91,15 @@ impl Borrow<String> for &CurveIdentifier {
 pub struct ConsiderationIdentifier(String);
 
 
-impl From<String> for ConsiderationIdentifier {
-    fn from(value: String) -> Self {
+impl ConsiderationIdentifier {
+    pub fn from_string(value: String) -> Self {
         Self(value)
     }
 }
 
-impl From<&str> for ConsiderationIdentifier {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
+impl<IS: Into<String>> From<IS> for ConsiderationIdentifier {
+    fn from(value: IS) -> Self {
+        Self::from_string(value.into())
     }
 }
 

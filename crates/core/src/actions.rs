@@ -85,6 +85,30 @@ pub struct ActionTemplate {
 }
 
 impl ActionTemplate {
+    pub fn new<
+        INS: Into<String>,
+        CFN: Into<ContextFetcherIdentifier>,
+        IAK: Into<String>,
+    >(
+        name: INS,
+        context_fetcher_name: CFN,
+        considerations: Vec<ConsiderationData>,
+        priority: types::ActionScore, 
+        action_key: IAK, 
+        lod_min: Option<types::AiLodLevelPrimitive>,
+        lod_max: Option<types::AiLodLevelPrimitive>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            context_fetcher_name: context_fetcher_name.into(),
+            considerations: considerations,
+            priority: priority,
+            action_key: action_key.into(),
+            lod_min: lod_min,
+            lod_max: lod_max,
+        }
+    }
+
     /// Checks if this template should be processed at a given LOD.
     pub fn is_within_lod_range(&self, lod: &Option<crate::lods::AiLevelOfDetailValue>) -> bool {
         let qry_lod = lod.map(|lv| lv.to_primitive()).unwrap_or(crate::lods::LOD_NORMAL);

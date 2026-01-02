@@ -385,7 +385,7 @@ pub fn decision_engine(
                                 "decision_engine: AI {:?} - failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
                                 &audience,
                                 &cons.curve_name,
-                                &cons.func_name,
+                                &cons.consideration_name,
                             );
                             continue;
                         },
@@ -424,7 +424,7 @@ pub fn decision_engine(
                 let resolved_curve = maybe_resolved_curve.unwrap();
 
                 let consideration_system = consideration_system_map.mapping
-                    .get(&cons.func_name)
+                    .get(&cons.consideration_name)
                 ;
 
                 match consideration_system {
@@ -432,9 +432,10 @@ pub fn decision_engine(
                         bevy::log::error!(
                             "decision_engine: AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
                             &audience,
-                            &cons.func_name
+                            &cons.consideration_name
                         );
-                        break;
+                        panic!("Consideration failed - could not resolve to a System!");
+                        // break;
                     },
 
                     Some(system_guard) => {
@@ -456,7 +457,7 @@ pub fn decision_engine(
                             bevy::log::error!(
                                 "AI {:?} - Consideration '{:}' errored - lock poisoned ({:?})!", 
                                 &audience, 
-                                &cons.func_name, 
+                                &cons.consideration_name, 
                                 &res
                             );
                             panic!("Consideration failed - lock poisoned!");
@@ -468,7 +469,7 @@ pub fn decision_engine(
                             bevy::log::error!(
                                 "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
                                 &audience, 
-                                &cons.func_name, 
+                                &cons.consideration_name, 
                                 &res
                             );
                             curr_score = types::MIN_CONSIDERATION_SCORE - 1.;
@@ -488,7 +489,7 @@ pub fn decision_engine(
                                     were flipped, min={:?} > max={:?}. 
                                     They have been flipped back so Min<=Max for you for now. 
                                     This fixup is not guaranteed to be in place in future versions of the library!",
-                                    cons.func_name,
+                                    cons.consideration_name,
                                     &action_template.name,
                                     cons.min,
                                     cons.max,
@@ -519,7 +520,7 @@ pub fn decision_engine(
                             - Adjusted w/ Curve {:?} => {:?}
                             - Current running total score for Action => {:?}",
                             audience,
-                            cons.func_name,
+                            cons.consideration_name,
                             &action_template.name,
                             raw_score,
                             rescaled_score,
@@ -535,7 +536,7 @@ pub fn decision_engine(
                             bevy::log::debug!(
                                 "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - curr_score {:?} is below the template best of {:?}, discarding the Context.",
                                 audience,
-                                cons.func_name,
+                                cons.consideration_name,
                                 &action_template.name,
                                 curr_score,
                                 curr_template_best,

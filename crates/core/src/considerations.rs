@@ -10,7 +10,7 @@ use crate::utility_concepts::{ConsiderationIdentifier, CurveIdentifier};
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub struct ConsiderationData {
     #[serde(rename="consideration")]
-    pub func_name: ConsiderationIdentifier,
+    pub consideration_name: ConsiderationIdentifier,
 
     #[serde(rename="curve")]
     pub curve_name: CurveIdentifier,
@@ -20,17 +20,17 @@ pub struct ConsiderationData {
 }
 
 impl ConsiderationData {
-    pub fn new(
-        func_name: ConsiderationIdentifier,
-        curve_name: CurveIdentifier,
+    pub fn new<CNN: Into<ConsiderationIdentifier>, CRN: Into<CurveIdentifier>>(
+        consideration_name: CNN,
+        curve_name: CRN,
         min: types::ActionScore,
         max: types::ActionScore,
     ) -> Self {
         Self {
-            func_name,
-            curve_name,
-            min, 
-            max, 
+            consideration_name: consideration_name.into(),
+            curve_name: curve_name.into(),
+            min: min, 
+            max: max, 
         }
     }
 }
@@ -139,11 +139,12 @@ pub trait AcceptsConsiderationRegistrations {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 
-        F: IntoConsiderationSystem<Marker, System = CS> + 'static
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         consideration: F, 
-        key: ConsiderationIdentifier
+        key: IS,
     ) -> &mut Self;
 }
 
@@ -151,17 +152,18 @@ impl AcceptsConsiderationRegistrations for World {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 
-        F: IntoConsiderationSystem<Marker, System = CS> + 'static
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         consideration: F, 
-        key: ConsiderationIdentifier
+        key: IS
     ) -> &mut Self {
-        let mut system = F::into_system(consideration);
-        system.initialize(self);
+        let system = F::into_system(consideration);
+        let system_key = ConsiderationIdentifier::from(key);
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
         system_registry.mapping.insert(
-            key, 
+            system_key, 
             std::sync::Arc::new(std::sync::RwLock::new(
                 system
             )));
@@ -173,11 +175,12 @@ impl AcceptsConsiderationRegistrations for App {
     fn register_consideration<
         CS: ConsiderationSystem, 
         Marker, 
-        F: IntoConsiderationSystem<Marker, System = CS> + 'static
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         consideration: F, 
-        key: ConsiderationIdentifier
+        key: IS
     ) -> &mut Self {
         self.world_mut().register_consideration(consideration, key);
         self

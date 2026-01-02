@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
 use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
+use crate::utility_concepts::ContextFetcherIdentifier;
 
 
 /// Convenience type-alias for generic inputs piped into each ContextFetcher. 
@@ -95,11 +96,12 @@ pub trait AcceptsContextFetcherRegistrations {
     fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
-        F: IntoContextFetcherSystem<Marker, System = CS> + 'static
+        F: IntoContextFetcherSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         context_fetcher: F, 
-        key: types::ContextFetcherKey,
+        key: IS,
     ) -> &mut Self;
 }
 
@@ -107,16 +109,18 @@ impl AcceptsContextFetcherRegistrations for World {
     fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
-        F: IntoContextFetcherSystem<Marker, System = CS> + 'static
+        F: IntoContextFetcherSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         context_fetcher: F, 
-        key: types::ContextFetcherKey,
+        key: IS,
     ) -> &mut Self {
         let system = F::into_system(context_fetcher);
+        let system_key = ContextFetcherIdentifier::from(key);
         let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();
         system_registry.mapping.insert(
-            key, 
+            system_key, 
             std::sync::Arc::new(std::sync::RwLock::new(
                 system
             )));
@@ -128,11 +132,12 @@ impl AcceptsContextFetcherRegistrations for App {
     fn register_context_fetcher<
         CS: ContextFetcherSystem, 
         Marker, 
-        F: IntoContextFetcherSystem<Marker, System = CS> + 'static
+        F: IntoContextFetcherSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
     >(
         &mut self, 
         context_fetcher: F, 
-        key: types::ContextFetcherKey,
+        key: IS,
     ) -> &mut Self {
         self.world_mut().register_context_fetcher(context_fetcher, key);
         self

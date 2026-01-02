@@ -12,11 +12,10 @@ use bevy_cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
 use bevy_cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
 use bevy_cortex::events;
 use bevy_cortex::types::{self, ActionContextRef, ActionScore};
-use bevy_cortex::utility_concepts::{ConsiderationIdentifier, ContextFetcherIdentifier, CurveIdentifier};
 use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
 use bevy_cortex::CortexPlugin;
 
-const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "ExampleCF";
+const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
 #[derive(Debug, EntityEvent)]
 struct ExampleActionEvent{
@@ -70,7 +69,7 @@ fn example_action_tracker_handler(
         let action_key = &tracker.0.action.action_key;
 
         match action_key.as_str() {
-            "ExampleAction" => {
+            "e2e::ExampleAction" => {
                 bevy::log::info!("Triggering a ExampleActionEvent...");
                 commands.trigger(ExampleActionEvent::from_context_ref(
                     tracker.0.action.context.clone(),
@@ -200,28 +199,28 @@ fn setup_example_entity(
     mut actionset_store: ResMut<ActionSetStore>,
 ) {
     let example_actions = [
-        ActionTemplate  {
-            name: "ExampleAction".to_string(),
-            context_fetcher_name: ContextFetcherIdentifier(EXAMPLE_CONTEXT_FETCHER_NAME.to_string()),
-            considerations: Vec::from([
+        ActionTemplate::new(
+            "ExampleAction",
+            EXAMPLE_CONTEXT_FETCHER_NAME.to_string(), 
+            Vec::from([
                 ConsiderationData::new(
-                    ConsiderationIdentifier::from("One".to_string()),
-                    CurveIdentifier::from("Linear".to_string()),
+                    "e2e::One",
+                    "Linear",
                     0.,
                     1.5,
                 ),
                 ConsiderationData::new(
-                    ConsiderationIdentifier::from("Two".to_string()),
-                    CurveIdentifier::from("Square".to_string()),
+                    "e2e::Two",
+                    "Square",
                     0.,
                     1.,
                 )
             ]),
-            priority: 1.,
-            action_key: "ExampleAction".to_string(),
-            lod_min: None, 
-            lod_max: None,
-        }
+            1.,
+            "e2e::ExampleAction",
+            None, 
+            None,
+        )
     ];
 
     let example_actionset = ActionSet {
@@ -342,9 +341,9 @@ fn main() {
     ))
     .add_plugins(CortexPlugin)
     .init_resource::<DespawnedAnyActionTrackers>()
-    .register_consideration(example_consideration_one, "One".into())
-    .register_consideration(example_consideration_two, "Two".into())
-    .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME.to_string().into())
+    .register_consideration(example_consideration_one, "e2e::One")
+    .register_consideration(example_consideration_two, "e2e::Two")
+    .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME)
     .add_systems(Startup, (
         setup_example_context, 
         setup_example_entity, 
