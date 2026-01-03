@@ -3,17 +3,17 @@ use std::collections::HashMap;
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 
-use bevy_cortex::actions::{ActionTemplate};
-use bevy_cortex::action_runtime::*;
-use bevy_cortex::action_state::ActionState;
-use bevy_cortex::actionset::ActionSet;
-use bevy_cortex::ai::AIController;
-use bevy_cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
-use bevy_cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
-use bevy_cortex::events;
-use bevy_cortex::types::{self, ActionContextRef, ActionScore, ThreadSafeRef};
-use bevy_cortex::smart_object::{ActionSetStore, SmartObjects};
-use bevy_cortex::prelude::CortexPlugin;
+use cortex::actions::{ActionTemplate};
+use cortex::action_runtime::*;
+use cortex::action_state::ActionState;
+use cortex::actionset::ActionSet;
+use cortex::ai::AIController;
+use cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
+use cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
+use cortex::events;
+use cortex::types::{self, ActionContextRef, ActionScore, ConsiderationOutputs, ThreadSafeRef};
+use cortex::smart_object::{ActionSetStore, SmartObjects};
+use cortex::prelude::CortexPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
@@ -143,6 +143,17 @@ fn example_action(
     }
 }
 
+
+/// A simple 2d Position component for demo purposes only.
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct Position2d(Vec2);
+
+impl Position2d {
+    fn euclid_distance(&self, other: &Self) -> f32 {
+        self.0.distance(other.0)
+    }
+}
+
 /// A Component storing a simple FSM-like state transition mapping. 
 /// 
 /// Only used for demonstration purposes; we'll add an example ContextFetcher 
@@ -159,14 +170,10 @@ pub struct DumbMarker;
 /// A ContextFetcher that returns Entities with an ExampleStateMapContextComponent
 fn example_context_fetcher(
     inp: crate::types::ContextFetcherInputs,
-    context_data_qry: Query<(Entity, &DumbMarker)>,
+    context_data_qry: Query<Entity, With<ExampleStateMapContextComponent>>,
 ) -> crate::types::ContextFetcherOutputs {
     bevy::log::debug!("example_context_fetcher triggered for AI {:?}", inp.0.0);
-    context_data_qry.iter().filter_map(|(id, map)| {
-        // bevy::log::debug!("example_context_fetcher for AI {:?} processing Entity {:?} w/ {:?}, {:?}", inp.0.0, id, world.);
-        bevy::log::debug!("example_context_fetcher for AI {:?} processing Entity {:?} w/ {:?}", inp.0.0, id, map);
-        Some(id)
-    }).collect()
+    context_data_qry.iter().collect()
 }
 
 fn setup_example_context(
@@ -298,7 +305,7 @@ fn exit_on_finish_all_tasks(
 fn example_consideration_one(
     _inputs: types::ConsiderationInputs,
     qry: Query<&ActionTrackerState>
-) -> ActionScore {
+) -> types::ConsiderationOutputs {
     let mut good_cnt = 0;
     let mut bad_cnt = 0;
 
@@ -311,18 +318,74 @@ fn example_consideration_one(
 
     let total_cnt = good_cnt + bad_cnt;
 
-    if total_cnt > 0 {
+    let val = if total_cnt > 0 {
         (good_cnt as ActionScore) / (total_cnt as ActionScore)
     } else {
         1.
-    }
+    };
+
+    val.into()
 }
 
 /// Trivial Consideration, returns a flat value.
 fn example_consideration_two(
     _inputs: types::ConsiderationInputs,
-) -> ActionScore {
-    0.9
+) -> types::ConsiderationOutputs {
+    0.9.into()
+}
+
+/// A Consideration that measures the distance (Euclidian, so straight-line) between 
+/// the AI's Pawn and the Context 'target'. 
+/// 
+/// This is a common and insanely useful building block for a variety of Actions, e.g. 
+/// - To favor targets close by for pickup/interaction/combat 
+/// - To select spawn locations a minimum distance away from the player
+/// - To cheaply pre-filter locations for pathfinding or raycasting Considerations downstream
+fn example_consideration_three(
+    inputs: types::ConsiderationInputs,
+    qry: Query<&Position2d>
+) -> ConsiderationOutputs {
+    
+    let (ai, maybe_pawn, targ) = inputs.0;
+
+    let pawn = match maybe_pawn {
+        None => {
+            bevy::log::error!(
+                "example_consideration_three requires a Pawn, but AI {:?} does not have one!",
+                ai, 
+            );
+            return None
+        },
+        Some(p) => p,
+    };
+
+    let pawn_pos = match qry.get(pawn) {
+        Err(_) => {
+            bevy::log::error!(
+                "example_consideration_three requires the Pawn to have a Position2d, but Pawn {:?} of AI {:?} does not!",
+                pawn, ai,
+            );
+            return None
+        }
+        Ok(pos) => pos,
+    };
+
+    let targ_pos = match qry.get(targ) {
+        Err(_) => {
+            bevy::log::error!(
+                "example_consideration_three requires the Context to have a Position2d, but Context {:?} for AI {:?} does not!",
+                targ, ai,
+            );
+            return None
+        }
+        Ok(pos) => pos,
+    };
+
+    // Calculate the actual raw score:
+    let val = pawn_pos.euclid_distance(targ_pos);
+
+    // We'll use .into() to ensure that we can ignore simple output interface changes.
+    val.into()
 }
 
 fn main() {
@@ -341,8 +404,12 @@ fn main() {
     ))
     .add_plugins(CortexPlugin)
     .init_resource::<DespawnedAnyActionTrackers>()
+    // We'll use an 'e2e::' prefix as a convention to quasi-namespace user-registered Systems. 
+    // This is not required, just a good practice to avoid key collisions from multiple Plugins. 
+    // In case of a collision, the most recently registered value takes precedence. 
     .register_consideration(example_consideration_one, "e2e::One")
     .register_consideration(example_consideration_two, "e2e::Two")
+    .register_consideration(example_consideration_three, "e2e::DistanceToPawn2d")
     .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME)
     .add_systems(Startup, (
         setup_example_context, 

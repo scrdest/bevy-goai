@@ -118,12 +118,21 @@ impl AcceptsContextFetcherRegistrations for World {
     ) -> &mut Self {
         let system = F::into_system(context_fetcher);
         let system_key = ContextFetcherIdentifier::from(key);
-        let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();
-        system_registry.mapping.insert(
-            system_key, 
+        let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();            
+        let old = system_registry.mapping.insert(
+            system_key.to_owned(), 
             std::sync::Arc::new(std::sync::RwLock::new(
                 system
             )));
+        match old {
+            None => {},
+            Some(_) => {
+                bevy::log::warn!(
+                    "Detected a key collision for key {:?}. Ejecting previous registration...",
+                    system_key
+                );
+            } 
+        }
         self
     }
 }

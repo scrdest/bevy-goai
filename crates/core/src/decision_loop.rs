@@ -1,5 +1,4 @@
 use std::borrow::Borrow;
-use std::collections::HashMap;
 
 use bevy::prelude::*;
 
@@ -197,10 +196,7 @@ pub fn decision_engine(
 
     // Best score reached for this ActionTemplate
     // This is a bit more 'local' than the per-AI score
-    let mut best_scoring_template = HashMap::<
-        (Entity, ActionTemplateRef), 
-        ActionScore
-    >::new();
+    let mut best_scoring_template: Option<(ActionTemplateRef, ActionScore)> = None;
     
     let maybe_smartobjects = &event.smart_objects;
     let maybe_pawn = pawn_query.get(audience).ok().flatten().cloned();
@@ -274,6 +270,9 @@ pub fn decision_engine(
                         &action_template.context_fetcher_name, 
                         &res,
                     );
+                    // If we ever skipped the panic below, this should be uncommented
+                    // continue;
+
                     // If the lock has been poisoned, we've had a panic inside it, 
                     // so we're in uncharted waters - abort before things get worse.
                     panic!("decision_engine: ContextFetcher failed - lock poisoned!");
@@ -304,6 +303,11 @@ pub fn decision_engine(
         };
 
         for ctx in contexts {
+            // A flag that indicates the whole processed Context is unusable; 
+            // when true, this loop should continue out to the next value and
+            // any nested loop should break ASAP to avoid wasting processing.
+            let mut skip_this_context = false;
+
             let ctx_ref = ctx;
             
             bevy::log::debug!("decision_engine: AI {:?} - processing Ctx {:?} for Action {:?}", 
@@ -311,15 +315,15 @@ pub fn decision_engine(
                 &ctx_ref, 
                 &action_template,
             );
-            let ai = &audience;
 
             let curr_best_for_ai = best_scoring_triple
-                .clone()
-                .map(|tup| tup.0);
+                .as_ref()
+                .map(|tup| tup.0)
+            ;
 
             // We do not unwrap curr_best_for_ai fully to be clearer when it's null vs zero.
-            if let Some(some_curr_best) = curr_best_for_ai {
-                if some_curr_best >= action_template.priority {
+            if let Some(some_curr_best) = &curr_best_for_ai {
+                if some_curr_best >= &action_template.priority {
                     // Priority forms a ceiling for maximum final score.
                     // At Priority 1, the max score is 1.0; at 2 -> 2.0; at 5 -> 5.0 etc.
                     // If we have a Priority 1 Action and the high score is 2.2, we will never beat it.
@@ -334,10 +338,6 @@ pub fn decision_engine(
                     continue;
                 }
             }
-            
-            let best_score_for_template = best_scoring_template
-                .get(&(ai.entity(), action_template.to_owned()))
-            ;
 
             // The current total score for this AI + Action
             let mut curr_score = types::MAX_CONSIDERATION_SCORE;
@@ -436,8 +436,9 @@ pub fn decision_engine(
                             &audience,
                             &cons.consideration_name
                         );
-                        panic!("Consideration failed - could not resolve to a System!");
+                        // Uncomment if the panic! below is ever removed:
                         // break;
+                        panic!("Consideration failed - could not resolve to a System!");
                     },
 
                     Some(system_guard) => {
@@ -447,7 +448,7 @@ pub fn decision_engine(
                                 consideration_system.run_readonly(
                                 (
                                         audience.entity(),
-                                        audience.entity(),
+                                        maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
                                         ctx_ref.clone(),
                                     ),
                                     world_ref,
@@ -462,26 +463,49 @@ pub fn decision_engine(
                                 &cons.consideration_name, 
                                 &res
                             );
+                            // Uncomment if the panic! below is ever removed:
+                            // break;
                             panic!("Consideration failed - lock poisoned!");
                         };
 
                         let res = res.unwrap();
 
                         if res.is_err() {
-                            bevy::log::error!(
-                                "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
-                                &audience, 
-                                &cons.consideration_name, 
-                                &res
-                            );
                             curr_score = types::MIN_CONSIDERATION_SCORE - 1.;
                             break;
                         };
 
-                        let raw_score = res.expect(
-                            "decision_engine: Failed to unwrap a Consideration result to a raw_score. 
-                            It should always be Ok, but is somehow an Err value."
-                        );
+                        let raw_score = match res {
+                            Err(e) => {
+                                bevy::log::error!(
+                                    "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
+                                    &audience, 
+                                    &cons.consideration_name, 
+                                    &e
+                                );
+                                curr_score = types::MIN_CONSIDERATION_SCORE;
+                                break;
+                            },
+                            Ok(maybe_val) => match maybe_val {
+                                Some(val) => val,
+                                None => {
+                                    // A None return value signifies something went wrong, but it's not worth crashing over. 
+                                    // 
+                                    // Usually, this is an issue with either the Context or the Pawn not satisfying the Consideration 
+                                    // invariants (for example, a Consideration requires a Pawn, but it is null, or the Contexts should 
+                                    // all have SomeRandomComponent but the ContextFetcher returned one without it somehow).
+                                    //
+                                    // This is distinct from returning zero, as zero 
+                                    bevy::log::info!(
+                                        "decision_engine: AI {:?} - Consideration '{:}' returned a None score, indicating a nonfatal error. Defaulting to zero score.", 
+                                        &audience, 
+                                        &cons.consideration_name, 
+                                    );
+                                    curr_score = types::MIN_CONSIDERATION_SCORE;
+                                    skip_this_context = true; break;
+                                }
+                            }
+                        };
 
                         let (true_min, true_max) = match cons.min <= cons.max {
                             true => (cons.min, cons.max),
@@ -505,10 +529,6 @@ pub fn decision_engine(
                         // e.g. if min = -1 and raw_score = -5, we read the raw_score as just -1.
                         // Similarly if max = -4 and raw_score = -1, we read the raw_score as just -4.
                         let rescaled_score = (raw_score - true_min).clamp(true_min, true_max) / (true_max - true_min);
-
-                        let curr_template_best = best_score_for_template.copied().unwrap_or(
-                            types::MIN_CONSIDERATION_SCORE
-                        );
 
                         let score = resolved_curve.sample_safe(rescaled_score);
 
@@ -534,16 +554,21 @@ pub fn decision_engine(
                         // There is a superior Context for this ActionTemplate.
                         // We don't need to bother checking other Considerations for this Context, 
                         // as it will not get picked anyway.
-                        if curr_template_best >= curr_score {
+                        let curr_beats_old_best = match &best_scoring_template {
+                            None => true,
+                            Some((_old_best_tmpl, old_best_score)) => &curr_score > old_best_score,
+                        };
+
+                        if !curr_beats_old_best {
                             bevy::log::debug!(
                                 "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - curr_score {:?} is below the template best of {:?}, discarding the Context.",
                                 audience,
                                 cons.consideration_name,
                                 &action_template.name,
                                 curr_score,
-                                curr_template_best,
+                                best_scoring_template,
                             );
-                            break;
+                            skip_this_context = true; break;
                         }
 
                         // We need to know how many Considerations we have processed for later.
@@ -552,13 +577,23 @@ pub fn decision_engine(
                     }
                 }
             }
-            
-            best_scoring_template.insert(
-                (ai.entity(), action_template.clone()), 
-                // Each Context has the same amount of Considerations and same Priority, 
-                // so we can store and compare raw scores without the other cruft.
-                curr_score
-            );
+
+            if skip_this_context {
+                continue;
+            }
+
+            let curr_beats_old_best = match &best_scoring_template {
+                None => true,
+                Some((_old_best_tmpl, old_best_score)) => &curr_score > old_best_score,
+            };
+
+            if curr_beats_old_best {
+                // Update best Context score for Template to skip sub-optimals
+                let _ = best_scoring_template.insert((
+                    action_template.to_owned(), 
+                    curr_score.to_owned()
+                ));
+            }
 
             let adjusted_score = consideration_adjustment(
                 curr_score, 

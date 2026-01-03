@@ -329,16 +329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy-cortex"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "cortex-actionset-loader",
- "cortex-bevy-plugin",
- "cortex-core",
-]
-
-[[package]]
 name = "bevy_a11y"
 version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1918,6 +1908,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cortex-actionset-loader",
+ "cortex-bevy-plugin",
+ "cortex-core",
+]
+
+[[package]]
 name = "cortex-actionset-loader"
 version = "0.1.0"
 dependencies = [
@@ -1933,6 +1933,7 @@ name = "cortex-bevy-plugin"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "cortex-actionset-loader",
  "cortex-core",
 ]
 

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
-use crate::types::{self, ActionContextRef, ActionScore, AiEntity, PawnEntity};
+use crate::types::{self, ActionContextRef, AiEntity, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 
 #[cfg(any(feature = "actionset_loader"))]
@@ -60,12 +60,12 @@ impl ConsiderationData {
 /// retrieval of data about them in your custom Queries (using `Query::get()`). 
 pub type ConsiderationInputs = bevy::prelude::In<(
     AiEntity, 
-    PawnEntity,
+    PawnEntityRef,
     ActionContextRef, 
 )>;
 
 /// Convenience type-alias for the output type a Consideration must return.
-pub type ConsiderationOutputs = ActionScore;
+pub type ConsiderationOutputs = Option<f32>;
 
 
 /// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
@@ -76,13 +76,13 @@ pub type ConsiderationOutputs = ActionScore;
 /// number of Queries, Resource accesses, etc. - as long as they are read-only.
 pub trait ConsiderationSystem: bevy::ecs::system::ReadOnlySystem<
     In = ConsiderationInputs, 
-    Out = ActionScore
+    Out = ConsiderationOutputs
 > {}
 
 impl<
     ROS: bevy::ecs::system::ReadOnlySystem<
         In = ConsiderationInputs, 
-        Out = ActionScore
+        Out = ConsiderationOutputs
     >
 > ConsiderationSystem for ROS {}
 
@@ -91,7 +91,7 @@ impl<
 /// that can be turned into a valid Cortex Consideration System.
 pub trait IntoConsiderationSystem<Marker>: IntoSystem<
     ConsiderationInputs, 
-    ActionScore, 
+    ConsiderationOutputs, 
     Marker,
 > {}
 
@@ -100,7 +100,7 @@ impl<
     CS: ConsiderationSystem, 
     IS: IntoSystem<
         ConsiderationInputs,
-        ActionScore, 
+        ConsiderationOutputs, 
         Marker,
         System = CS
     >
@@ -164,11 +164,20 @@ impl AcceptsConsiderationRegistrations for World {
         let system = F::into_system(consideration);
         let system_key = ConsiderationIdentifier::from(key);
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
-        system_registry.mapping.insert(
-            system_key, 
+        let old = system_registry.mapping.insert(
+            system_key.to_owned(), 
             std::sync::Arc::new(std::sync::RwLock::new(
                 system
             )));
+        match old {
+            None => {},
+            Some(_) => {
+                bevy::log::warn!(
+                    "Detected a key collision for key {:?}. Ejecting previous registration...",
+                    system_key
+                );
+            } 
+        }
         self
     }
 }

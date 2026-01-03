@@ -1027,28 +1027,43 @@ impl UtilityCurveRegistry {
 pub trait AcceptsCurveRegistrations {
     fn register_utility_curve<
         U: UtilityCurve + 'static,
+        IS: Into<String>
     >(
         &mut self, 
         consideration: U, 
-        key: crate::types::UtilityCurveKey,
+        key: IS,
     ) -> &mut Self;
 }
 
 impl AcceptsCurveRegistrations for bevy::prelude::World {
     fn register_utility_curve<
         U: UtilityCurve + 'static,
+        IS: Into<String>
     >(
         &mut self, 
         curve: U, 
-        key: crate::types::UtilityCurveKey,
+        key: IS,
     ) -> &mut Self {
         let mut registry = self.get_resource_or_init::<UtilityCurveRegistry>();
-        registry.mapping.insert(
-            key, 
+        let curve_key = crate::types::UtilityCurveKey::from(key.into());
+        
+        let old = registry.mapping.insert(
+            curve_key.to_owned(), 
             SupportedUtilityCurve::Custom(
                 std::sync::Arc::new(curve)
             )
         );
+
+        match old {
+            None => {},
+            Some(_) => {
+                bevy::log::warn!(
+                    "Detected a key collision for key {:?}. Ejecting previous registration...",
+                    curve_key
+                );
+            } 
+        };
+
         self
     }
 }
@@ -1056,10 +1071,11 @@ impl AcceptsCurveRegistrations for bevy::prelude::World {
 impl AcceptsCurveRegistrations for bevy::prelude::App {
     fn register_utility_curve<
         U: UtilityCurve + 'static,
+        IS: Into<String>
     >(
         &mut self, 
         curve: U, 
-        key: crate::types::UtilityCurveKey,
+        key: IS,
     ) -> &mut Self {
         self.world_mut().register_utility_curve(curve, key);
         self

@@ -1,6 +1,6 @@
 # Cortex
 
-## Mission Statement: 
+**Mission Statement:** 
 
 > See more vibrant, interesting, living and breathing virtual worlds in games  
 > by making it as easy as possible for developers to create and run them efficiently.
@@ -11,13 +11,15 @@ such as games and simulations.
 
 `Cortex` is built using the [Bevy Game Engine](https://bevyengine.org/). 
 
-However, a key design goal of the library is to be usable *outside* of Bevy applications - even outside of Rust. 
+However, a key design goal of the library is to be usable **outside** of Bevy - and even for
+non-Rust applications (*"AI Server style"*), while integrating cleanly *with* Bevy
+applications at the same time (*"Native AI style"*).
 
 In fact, a major motivator for its creation was the need for a performant AI engine 
 for NPCs in a project written in a deeply locked-down, decades-old game engine. 
 
 
-### Features
+## Features
 
 * **Data-driven** - Let coders code core capabilities and let designers (and modders!) play with them.
 * **High-performance** - Beyond 'blazingly fast': parallelism, data-oriented processing, an efficient core AI paradigm, and a bag of game AI optimization tricks to keep framerates smooth and crowds large.
@@ -30,25 +32,126 @@ for NPCs in a project written in a deeply locked-down, decades-old game engine.
 * **Safe** - Typechecker-approved, uses thread-safe solutions where multithreading is relevant.
 
 
-### Glossary
+### Example 
 
-- `AIController` - An Entity that can autonomously select and execute `Actions`.
-- `Pawn` - The actual thing(s) the AIController drives. A single NPC, a squad of them, a crowd, a faction, or even the abstract 'game flow' for AI Directors à la Left 4 Dead. 
-- `Action` - A thing the AI can do - moving, spawning an entity, shooting, or picking up an item. Consists of an `ActionTemplate` and an `ActionContext`.
-- `ActionTemplate` - An abstract 'essence' of the Action, e.g. Move(somewhere) or PickUp(something). Stores the data needed by the decision engine to turn it into an `Action`.
-- `ActionContext` - The 'target'/'object' of the Action, e.g. a position to move to, an NPC to shoot at, or an item to pick up. The thing that goes in the 'somewhere'/'something' in the ActionTemplate.
-- `ActionSet` - A collection of `ActionTemplates`.
-- `SmartObject` - A thing that provides one or more `ActionSet` to appropriate `AIControllers`. For example, a Cake item may be a SmartObject providing an Eat() ActionTemplate to the holder. The Pawn itself will often be a SmartObject providing various movement/combat/interaction Actions. 
-- `ContextFetcher` - A function that returns Contexts for an Action. This can and likely usually will be an ECS System of some kind to allow for making ECS World Queries. Should usually be generic to be reusable across disparate Action, although specialist ones are justifiable. Generally expected to be supplied by users to tailor the AI to a specific game.
-- `Consideration` - A function that provides specific quantifiable data about the Context value. For example, given a Heal(Friend) Action, a Consideration may return the Friend's current Hitpoints or Distance to Pawn. An ECS System that receives a standard set of metadata inputs to facilitate Queries. Generally expected to be supplied by users to tailor the AI to a specific game.
-- `UtilityCurve` - An arbitrary function with inputs and outputs on a unit interval (i.e. 0.0-1.0). Used to shape the Utility response - is higher better or worse? How fast does it change? 
-- `Consideration Score` - The `Consideration`'s output after rescaling to a unit interval (i.e. 0.0-1.0) between its associated `Min` and `Max` values (as defined on the ActionTemplate) and applying the associated `UtilityCurve`.
-- `Action Score` - The product of all `Consideration Scores` for an Action, starting at 1.0, followed by multiplying by `Priority` of the Action.
-- `Priority` - A multiplier expressing the relative 'urgency' of Actions. Healing a bleeding wound should win over taking a nap even if both Action's unmultiplied Action Scores were at maximum (1.0). 
-- `ActionTracker` - An optional Entity providing a range of (even more optional) services to assist with managing the execution of the selected Action.
+For an explanation of the concepts used in the code below, see the [Glossary](GLOSSARY.md)
+
+```rust
+// Include the building blocks from Bevy and Cortex.
+use bevy::prelude::*;
+use cortex::prelude::*;
+
+// We'll filter on this simple marker Component being present.
+#[derive(Component)]
+pub struct DumbMarker;
+
+/// A simple 2d Position component for demo purposes only.
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct Position2d(Vec2);
+
+impl Position2d {
+    fn euclid_distance(&self, other: &Self) -> f32 {
+        self.0.distance(other.0)
+    }
+}
+
+/// A simple ContextFetcher that returns Entities with a DumbMarker
+fn example_context_fetcher(
+    // Any CF must handle ContextFetcherInputs, even if they aren't used.
+    _inp: ContextFetcherInputs, 
+    // You can add any number of Queries, Resources, etc. here as long as they're read-only-compatible.
+    context_data_qry: Query<Entity, With<&DumbMarker>>,
+) 
+// Any CF must output this type (it's some flavor of an array of Entity like Vec<Entity>, 
+// you generally should be able to let the library worry about it by using a `.collect()`).
+-> ContextFetcherOutputs {
+    context_data_qry.iter().collect()
+}
+
+fn example_consideration(
+    // Any Consideration must handle ConsiderationInputs, even if they aren't used.
+    inputs: types::ConsiderationInputs,
+    // You can add any number of Queries, Resources, etc. here as long as they're read-only-compatible.
+    // In this case, we'll only query for Positions.
+    qry: Query<&Position2d>
+) 
+// Any CF must output this type - this is just an Option<f32>, 
+// where None indicates the data provided is invalid in some way and Some(value) is later 
+// normalized between the Min and Max values of the Consideration to make it 'comparable'.
+-> ConsiderationOutputs {
+    // These three values (AI Entity, optionally its Pawn Entity, and the Context Entity) are
+    // the standard Consideration inputs provided to every registered System by the runtime. 
+    let (ai, maybe_pawn, targ) = inputs.0;
+
+    // Validate the inputs. Instead of panicking, we'll return None.
+    // This means the runtime will recognize this Context was bad and ignore it, 
+    // but it can and will continue trying with other candidate Contexts.
+    let pawn = match maybe_pawn {
+        None => {
+            bevy::log::error!(
+                "example_consideration_three requires a Pawn, but AI {:?} does not have one!",
+                ai, 
+            );
+            return None
+        },
+        Some(p) => p,
+    };
+
+    let pawn_pos = match qry.get(pawn) {
+        Err(_) => {
+            bevy::log::error!(
+                "example_consideration_three requires the Pawn to have a Position2d, but Pawn {:?} of AI {:?} does not!",
+                pawn, ai,
+            );
+            return None
+        }
+        Ok(pos) => pos,
+    };
+
+    let targ_pos = match qry.get(targ) {
+        Err(_) => {
+            bevy::log::error!(
+                "example_consideration_three requires the Context to have a Position2d, but Context {:?} for AI {:?} does not!",
+                targ, ai,
+            );
+            return None
+        }
+        Ok(pos) => pos,
+    };
+
+    // Calculate the actual raw score:
+    let val = pawn_pos.euclid_distance(targ_pos);
+
+    // We'll use .into() to ensure that we can ignore simple output interface changes.
+    val.into()
+}
+
+// Putting it all together. You can easily port this example to a Plugin impl instead to wrap
+// your AI integration into a nice, portable bundle you can drop into your real `main()`.
+fn main() {
+    let mut app = App::new();
+
+    app
+        .add_plugins(CortexPlugin)
+        // Registering a ContextFetcher is as simple as passing it in with a key. 
+        // 
+        // 'Namespacing' keys (here with `mycode::`) is not necessary, but it is 
+        // recommended to reduce the risk of key collisions.
+        .register_context_fetcher(example_context_fetcher, "mycode::example_cf")
+        // Registering Considerations follows the same general pattern as for CFs. 
+        // 
+        // Note that the key we are supplying can have absolutely nothing to do 
+        // with the actual name of the function, and that we could register 
+        // many different keys mapped to the same implementation!
+        .register_consideration(example_consideration, "mycode::distance2d")
+    ;
+
+    app.run()
+}
+```
 
 
-### Architecture
+## Architecture
 
 The core `Cortex` engine largely follows the excellent `Infinite Axis Utility System` architecture as 
 outlined in the classic GDC 2015 talk ["Building a Better Centaur: AI at Massive Scale"](https://gdcvault.com/play/1021848/Building-a-Better-Centaur-AI) by Mike Lewis and Dave Mark.
@@ -59,7 +162,7 @@ The basic idea is very simple:
 3) The AI simply picks the highest-scoring candidate.
 4) The `Action` gets dispatched to the AI-controlled entity (a `Pawn`) for execution.
 
-The `Glossary` section provides a quick run-through of the process, with terms
+The `Glossary` provides a quick run-through of the process, with terms
 introduced roughly in the sequence in which they come up during the decision loop.
 
 Of course, the devil is in the details. There are a couple of design decisions worth mentioning.
@@ -108,7 +211,7 @@ but also leaves the door open for sub-libraries that provide useful AI tools and
 for a specific genre.
 
 
-### Getting started
+## Getting started
 
 The two main patterns of using `Cortex` are: 
 - **Native** - as a native part of your Bevy Engine applications.
@@ -158,12 +261,9 @@ Once you're done building your `ContextFetchers`, you can register them to the W
 using either the classic App Builder-style `app.register_context_fetcher(func, key)` or on 
 the World directly using `world.register_context_fetcher(func, key)`. 
 
+If you cannot see the method available, check your imports. 
 Rust's type system will stop you from registering a `ContextFetcher` if there is something 
-wrong with the function you have built. 
-
-If you cannot see the function, check your imports. 
-If you have trouble with the key argument, you can just call 
-`.into()` on your string key (since Cortex uses a wrapper type around raw string types).
+wrong with the function you have built. If you cannot see the function, check your imports. 
 
 
 #### Considerations 
@@ -183,11 +283,6 @@ Once you're done building your Consideration(s), you can register them easily us
 either the classic App Builder-style `app.register_consideration(func, key)` or on 
 the World directly using `world.register_consideration(func, key)`. 
 
+If you cannot see the method available, check your imports. 
 Rust's type system will stop you from registering a Consideration if there is something 
 wrong with the function you have built. 
-
-If you cannot see the function, check your imports. 
-If you have trouble with the key argument, you can just call 
-`.into()` on your string key (since Cortex uses a wrapper type around raw string types).
-
-

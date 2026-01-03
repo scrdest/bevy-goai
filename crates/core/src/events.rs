@@ -74,7 +74,7 @@ pub struct SomeAiDecisionProcessed;
 #[derive(EntityEvent)]
 pub struct AiDecisionRequested {
     pub entity: types::AiEntity,
-    pub smart_objects: Option<crate::smart_object::SmartObjects>,
+    pub smart_objects: Option<crate::types::SmartObjects>,
 }
 
 
@@ -86,7 +86,7 @@ pub struct AiDecisionRequested {
 #[derive(EntityEvent)]
 pub struct AiDecisionInitiated {
     pub entity: types::AiEntity,
-    pub smart_objects: Option<crate::smart_object::SmartObjects>,
+    pub smart_objects: Option<crate::types::SmartObjects>,
 }
 
 

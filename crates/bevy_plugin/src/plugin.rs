@@ -5,10 +5,19 @@ use cortex_core::context_fetchers;
 use cortex_core::decision_loop;
 use cortex_core::smart_object;
 
+#[cfg(feature = "include_actionset_loader")]
+use cortex_actionset_loader::ActionSetAssetPlugin;
+
 pub struct CortexPlugin; 
 
 impl Plugin for CortexPlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "include_actionset_loader")]
+        app
+        .add_plugins((
+            ActionSetAssetPlugin, 
+        ));
+
         app
         .add_plugins((
             context_fetchers::ContextFetcherPlugin, 

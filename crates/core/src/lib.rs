@@ -17,4 +17,5 @@ pub mod lods;
 pub mod pawn;
 // pub mod senses;
 pub mod smart_object;
+mod thread_safe_wrapper;
 pub mod types;
