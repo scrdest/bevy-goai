@@ -1915,6 +1915,7 @@ dependencies = [
  "cortex-actionset-loader",
  "cortex-bevy-plugin",
  "cortex-core",
+ "cortex-test-plugin",
 ]
 
 [[package]]
@@ -1943,6 +1944,14 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "serde",
+]
+
+[[package]]
+name = "cortex-test-plugin"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cortex-core",
 ]
 
 [[package]]

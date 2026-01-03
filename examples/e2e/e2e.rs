@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use bevy::log::LogPlugin;
-use bevy::{app::ScheduleRunnerPlugin, prelude::*};
+use bevy::prelude::*;
 
 use cortex::actions::{ActionTemplate};
 use cortex::action_runtime::*;
@@ -10,10 +9,13 @@ use cortex::actionset::ActionSet;
 use cortex::ai::AIController;
 use cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
 use cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
+use cortex::curves::{AcceptsCurveRegistrations, LinearCurve, UtilityCurveExt};
 use cortex::events;
 use cortex::types::{self, ActionContextRef, ActionScore, ConsiderationOutputs, ThreadSafeRef};
 use cortex::smart_object::{ActionSetStore, SmartObjects};
-use cortex::prelude::CortexPlugin;
+
+use cortex_bevy_plugin::CortexPlugin;
+use cortex_test_plugin::CortexTestPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
@@ -265,42 +267,6 @@ fn setup_default_action_tracker_config(
     config_res.config = Some(new_config.build());
 }
 
-/// Helper for triggering AppExit. 
-/// If True, we have actually despawned at least one tracker.
-/// This is needed so we don't stop BEFORE any trackers are created.
-#[derive(Resource)]
-struct DespawnedAnyActionTrackers(bool);
-
-impl Default for DespawnedAnyActionTrackers {
-    fn default() -> Self {
-        Self(false)
-    }
-}
-
-/// Helper for triggering AppExit. 
-/// Updates the DespawnedAnyActionTrackers on a despawn.
-fn mark_despawn_occurred(
-    _trigger: On<ActionTrackerDespawnRequested>,
-    mut marker: ResMut<DespawnedAnyActionTrackers>
-) {
-    marker.0 = true;
-}
-
-/// Calls AppExit if there are no running tasks left and at least one has been despawned.
-/// This is a helper to make it easier to test in a loop without manually killing the app.
-fn exit_on_finish_all_tasks(
-    query: Query<&ActionTracker>,
-    despawned: Res<DespawnedAnyActionTrackers>,
-    mut exit_writer: MessageWriter<AppExit>,
-) {
-    if !despawned.0 {
-        return;
-    }
-
-    if query.is_empty() {
-        exit_writer.write(AppExit::Success);
-    }
-}
 
 fn example_consideration_one(
     _inputs: types::ConsiderationInputs,
@@ -388,22 +354,22 @@ fn example_consideration_three(
     val.into()
 }
 
+
 fn main() {
     let mut app = App::new();
 
+    // A custom user-defined Curve
+    let leaky_curve = LinearCurve.hard_leak(0.5);
+
     app
-    .add_plugins((
-        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(std::time::Duration::from_millis(200))),
-        // MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
-        LogPlugin { 
-            level: bevy::log::Level::DEBUG, 
-            custom_layer: |_| None, 
-            filter: "wgpu=error,bevy_render=info,bevy_ecs=info".to_string(),
-            fmt_layer: |_| None,
-        }
-    ))
+    // Enables the main Cortex integration:
     .add_plugins(CortexPlugin)
-    .init_resource::<DespawnedAnyActionTrackers>()
+    
+    // Configures the app to shut down once all Actions are finished at the end of a tick, plus logs and such:
+    .add_plugins(CortexTestPlugin)
+
+    // Registering Considerations/ContextFetchers/Curves.
+    //
     // We'll use an 'e2e::' prefix as a convention to quasi-namespace user-registered Systems. 
     // This is not required, just a good practice to avoid key collisions from multiple Plugins. 
     // In case of a collision, the most recently registered value takes precedence. 
@@ -411,22 +377,20 @@ fn main() {
     .register_consideration(example_consideration_two, "e2e::Two")
     .register_consideration(example_consideration_three, "e2e::DistanceToPawn2d")
     .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME)
+    .register_utility_curve(leaky_curve, "e2e::Linear50pHardLeak")
+    
+    // Setting up various demo Entities
     .add_systems(Startup, (
         setup_example_context, 
         setup_example_entity, 
         setup_default_action_tracker_config,
     ))
-    .add_observer(example_action)
-    .add_observer(mark_despawn_occurred)
+
+    // Handling Actions
     .add_systems(FixedUpdate, (
         example_action_tracker_handler,
     ).chain())
-    .add_systems(
-        FixedPostUpdate, 
-        (
-            exit_on_finish_all_tasks,
-        ).chain()
-    )
+    .add_observer(example_action)
     ;
 
     app.run();

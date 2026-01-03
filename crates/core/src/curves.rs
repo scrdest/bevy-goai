@@ -39,6 +39,9 @@ use std::sync::Arc;
 use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
 use crate::types::{ActionScore, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
 
+// Reexporting some common basic Bevy Curves for easy access when building custom user Curves.
+pub use bevy::math::curve::{LinearCurve, QuadraticInCurve, QuadraticInOutCurve, ExponentialInCurve, CubicInCurve};
+
 /// Curve functions suitable for Utility scoring purposes.
 /// 
 /// A strict subset of Bevy's Curve trait.
@@ -492,15 +495,15 @@ pub const CONST_THREEQUARTER_CURVE: UtilityConstantCurve = UtilityConstantCurve:
 impl UtilityCurve for math::curve::CircularInCurve {}
 impl UtilityCurve for math::curve::CircularInOutCurve {}
 impl UtilityCurve for math::curve::CircularOutCurve {}
-impl UtilityCurve for math::curve::CubicInCurve {}
+impl UtilityCurve for CubicInCurve {}
 impl UtilityCurve for math::curve::CubicInOutCurve {}
 impl UtilityCurve for math::curve::CubicOutCurve {}
-impl UtilityCurve for math::curve::ExponentialInCurve {}
+impl UtilityCurve for ExponentialInCurve {}
 impl UtilityCurve for math::curve::ExponentialInOutCurve {}
 impl UtilityCurve for math::curve::ExponentialOutCurve {}
-impl UtilityCurve for math::curve::LinearCurve {}
-impl UtilityCurve for math::curve::QuadraticInCurve {}
-impl UtilityCurve for math::curve::QuadraticInOutCurve {}
+impl UtilityCurve for LinearCurve {}
+impl UtilityCurve for QuadraticInCurve {}
+impl UtilityCurve for QuadraticInOutCurve {}
 impl UtilityCurve for math::curve::QuadraticOutCurve {}
 impl UtilityCurve for math::curve::QuarticInCurve {}
 impl UtilityCurve for math::curve::QuarticInOutCurve {}
@@ -593,12 +596,12 @@ pub const CURVE_CONST_MAX: UtilityCurveSampler<UtilityConstantCurve> = UtilityCu
 pub const CURVE_CONST_HALF: UtilityCurveSampler<UtilityConstantCurve> = UtilityCurveSampler::new_forward(UtilityConstantCurve::new_const(128));
 pub const CURVE_ATLEAST: UtilityCurveSampler<UtilityBinaryCurve> = UtilityCurveSampler::new_forward(UtilityBinaryCurve {});
 pub const CURVE_LESSTHAN: UtilityCurveSampler<UtilityBinaryCurve> = UtilityCurveSampler::new_inverse(UtilityBinaryCurve {});
-pub const CURVE_LINEAR: UtilityCurveSampler<math::curve::LinearCurve> = UtilityCurveSampler::new_forward(math::curve::LinearCurve {});
-pub const CURVE_ANTILINEAR: UtilityCurveSampler<math::curve::LinearCurve> = UtilityCurveSampler::new_inverse(math::curve::LinearCurve {});
-pub const CURVE_SQUARE: UtilityCurveSampler<math::curve::QuadraticInCurve> = UtilityCurveSampler::new_forward(math::curve::QuadraticInCurve {});
-pub const CURVE_ANTISQUARE: UtilityCurveSampler<math::curve::QuadraticInCurve> = UtilityCurveSampler::new_inverse(math::curve::QuadraticInCurve {});
-pub const CURVE_EXPONENTIAL: UtilityCurveSampler<math::curve::ExponentialInCurve> = UtilityCurveSampler::new_forward(math::curve::ExponentialInCurve {});
-pub const CURVE_ANTIEXPONENTIAL: UtilityCurveSampler<math::curve::ExponentialInCurve> = UtilityCurveSampler::new_inverse(math::curve::ExponentialInCurve {});
+pub const CURVE_LINEAR: UtilityCurveSampler<LinearCurve> = UtilityCurveSampler::new_forward(LinearCurve {});
+pub const CURVE_ANTILINEAR: UtilityCurveSampler<LinearCurve> = UtilityCurveSampler::new_inverse(LinearCurve {});
+pub const CURVE_SQUARE: UtilityCurveSampler<QuadraticInCurve> = UtilityCurveSampler::new_forward(QuadraticInCurve {});
+pub const CURVE_ANTISQUARE: UtilityCurveSampler<QuadraticInCurve> = UtilityCurveSampler::new_inverse(QuadraticInCurve {});
+pub const CURVE_EXPONENTIAL: UtilityCurveSampler<ExponentialInCurve> = UtilityCurveSampler::new_forward(ExponentialInCurve {});
+pub const CURVE_ANTIEXPONENTIAL: UtilityCurveSampler<ExponentialInCurve> = UtilityCurveSampler::new_inverse(ExponentialInCurve {});
 
 #[derive(Clone)]
 pub enum SupportedUtilityCurve {
@@ -689,7 +692,7 @@ pub enum SupportedUtilityCurve {
     /// **COST:** Very cheap to calculate.
     /// 
     /// **USAGE:** Recommended first option until it becomes clear that you need bigger guns for the job.
-    Linear(UtilityCurveSampler<math::curve::LinearCurve>),
+    Linear(UtilityCurveSampler<LinearCurve>),
 
     /// A monotonically *decreasing* 'low-pass' Curve where t<=min returns 1.0, 
     /// t>=max returns 0.0, and every value in between is LERPed. 
@@ -699,7 +702,7 @@ pub enum SupportedUtilityCurve {
     /// **COST:** Very cheap to calculate.
     /// 
     /// **USAGE:** Recommended first option until it becomes clear that you need bigger guns for the job.
-    AntiLinear(UtilityCurveSampler<math::curve::LinearCurve>),
+    AntiLinear(UtilityCurveSampler<LinearCurve>),
 
     /// A monotonically increasing 'high-pass' Curve where t<=min returns 0.25, 
     /// t>=max returns 1.0, and every value in between is LERPed. 
@@ -710,7 +713,7 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** When you'd use Linear, but the Min/Max values are more guidelines than hard requirements. 
     /// You're still kinda okay running with values outside of that range, but would prefer not to.
-    Linear25pSoftLeak(SoftLeak<UtilityCurveSampler<math::curve::LinearCurve>>),
+    Linear25pSoftLeak(SoftLeak<UtilityCurveSampler<LinearCurve>>),
 
     /// A monotonically *decreasing* 'low-pass' Curve where t<=min returns 1.0, 
     /// t>=max returns 0.25, and every value in between is LERPed. 
@@ -721,7 +724,7 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** When you'd use AntiLinear, but the Min/Max values are more guidelines than hard requirements.
     /// You're still kinda okay running with values outside of that range, but would prefer not to.
-    AntiLinear25pSoftLeak(SoftLeak<UtilityCurveSampler<math::curve::LinearCurve>>),
+    AntiLinear25pSoftLeak(SoftLeak<UtilityCurveSampler<LinearCurve>>),
 
     /// A monotonically increasing 'high-pass' Curve similar to Linear, except uses input-squared. 
     /// 
@@ -730,7 +733,7 @@ pub enum SupportedUtilityCurve {
     /// **COST:** Bit more expensive than Linear, but nothing crazy. 
     /// 
     /// **USAGE:** Recommended whenever you want more focus on better-scoring values than Linear gives you.
-    Square(UtilityCurveSampler<math::curve::QuadraticInCurve>),
+    Square(UtilityCurveSampler<QuadraticInCurve>),
 
     /// A monotonically decreasing 'low-pass' Curve similar to AntiLinear, except uses input-squared. 
     /// 
@@ -739,7 +742,7 @@ pub enum SupportedUtilityCurve {
     /// **COST:** Bit more expensive than Linear, but nothing crazy. 
     /// 
     /// **USAGE:** Recommended whenever you want more focus on better-scoring values than AntiLinear gives you
-    AntiSquare(UtilityCurveSampler<math::curve::QuadraticInCurve>),
+    AntiSquare(UtilityCurveSampler<QuadraticInCurve>),
 
     /// A monotonically increasing 'high-pass' Curve using an exponential function. 
     /// 
@@ -755,7 +758,7 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** When you really only care about the top 10%-ish of the range but are still willing 
     /// to make compromises; a 'Binary with some tolerance' in a sense.
-    ExponentialIn(UtilityCurveSampler<math::curve::ExponentialInCurve>),
+    ExponentialIn(UtilityCurveSampler<ExponentialInCurve>),
     
     /// A monotonically decreasing 'low-pass' Curve using an exponential function. 
     /// 
@@ -771,7 +774,7 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** When you really don't want something in the top 10%-ish of the range 
     /// but are still willing to make compromises; an 'AntiBinary with some tolerance' in a sense.
-    AntiExponentialIn(UtilityCurveSampler<math::curve::ExponentialInCurve>),
+    AntiExponentialIn(UtilityCurveSampler<ExponentialInCurve>),
 
     /// A NON-monotonic, 'band-pass' Curve peaking at t=0.5 with minima at 0.0 and 1.0. 
     /// 
@@ -789,7 +792,7 @@ pub enum SupportedUtilityCurve {
     /// **USAGE:** Whenever you find yourself using a Linear + AntiLinear in sequence 
     /// to try to pick values in a specific range only (not too small, not too big). 
     /// This Curve is exactly equivalent to such a stack, but more efficient to process. 
-    Triangle(UtilityCurveSampler<HalfwayMirrorCurve<math::curve::LinearCurve>>),
+    Triangle(UtilityCurveSampler<HalfwayMirrorCurve<LinearCurve>>),
 
     /// A NON-monotonic, 'band-stop' Curve with maxima at 0.0 and 1.0 and a 'through' at 0.5. 
     /// 
@@ -809,7 +812,7 @@ pub enum SupportedUtilityCurve {
     /// Use whenever you find yourself using a AntiLinear + Linear in sequence 
     /// to try to pick values outside of a specific range only (either big or small, but not mid). 
     /// This Curve is exactly equivalent to such a stack, but more efficient to process. 
-    AntiTriangle(UtilityCurveSampler<HalfwayMirrorCurve<math::curve::LinearCurve>>),
+    AntiTriangle(UtilityCurveSampler<HalfwayMirrorCurve<LinearCurve>>),
 
     /// A NON-monotonic, 'band-pass' Curve peaking at t=0.5 with minima at 0.0 and 1.0. 
     /// 
@@ -828,7 +831,7 @@ pub enum SupportedUtilityCurve {
     /// 
     /// **USAGE:** When you want values 'around' the middle, you don't care too strongly 
     /// about hitting the middle precisely - but the middle is still optimal in some way.
-    QuadraticQuasiGauss(UtilityCurveSampler<HalfwayMirrorCurve<math::curve::QuadraticInOutCurve>>),
+    QuadraticQuasiGauss(UtilityCurveSampler<HalfwayMirrorCurve<QuadraticInOutCurve>>),
 
     /// A NON-monotonic, 'band-stop' Curve with maxima at 0.0 and 1.0 and a 'through' at 0.5. 
     /// 
@@ -851,7 +854,7 @@ pub enum SupportedUtilityCurve {
     /// could use this to filter targets - if the distances are slightly less than ideal, 
     /// the Pawn could move slightly to get a good shot, so we don't want to
     /// reject these potential targets outright.
-    AntiQuadraticQuasiGauss(UtilityCurveSampler<HalfwayMirrorCurve<math::curve::QuadraticInOutCurve>>),
+    AntiQuadraticQuasiGauss(UtilityCurveSampler<HalfwayMirrorCurve<QuadraticInOutCurve>>),
 
     /// A user-defined Curve type registered in the UtilityCurveRegistry. 
     /// 
@@ -959,26 +962,26 @@ pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Op
         "Linear" => Some(SupportedUtilityCurve::Linear(CURVE_LINEAR)),
         "AntiLinear" => Some(SupportedUtilityCurve::AntiLinear(CURVE_ANTILINEAR)),
         "Linear25%SoftLeak" => Some(SupportedUtilityCurve::Linear25pSoftLeak(
-            UtilityCurveSampler::new_forward(math::curve::LinearCurve {}).soft_leak(0.25)
+            UtilityCurveSampler::new_forward(LinearCurve {}).soft_leak(0.25)
         )),
         "AntiLinear25%SoftLeak" => Some(SupportedUtilityCurve::AntiLinear25pSoftLeak(
-            UtilityCurveSampler::new_inverse(math::curve::LinearCurve {}).soft_leak(0.25)
+            UtilityCurveSampler::new_inverse(LinearCurve {}).soft_leak(0.25)
         )),
         "Square" => Some(SupportedUtilityCurve::Square(CURVE_SQUARE)),
         "AntiSquare" => Some(SupportedUtilityCurve::AntiSquare(CURVE_ANTISQUARE)),
         "ExponentialIn" => Some(SupportedUtilityCurve::ExponentialIn(CURVE_EXPONENTIAL)),
         "AntiExponentialIn" => Some(SupportedUtilityCurve::AntiExponentialIn(CURVE_ANTIEXPONENTIAL)),
         "Triangle" => Some(SupportedUtilityCurve::Triangle(
-            UtilityCurveSampler::new_forward((math::curve::LinearCurve {}).halfway_mirror())
+            UtilityCurveSampler::new_forward((LinearCurve {}).halfway_mirror())
         )),
         "AntiTriangle" => Some(SupportedUtilityCurve::AntiTriangle(
-            UtilityCurveSampler::new_inverse((math::curve::LinearCurve {}).halfway_mirror())
+            UtilityCurveSampler::new_inverse((LinearCurve {}).halfway_mirror())
         )),
         "QuadGauss" => Some(SupportedUtilityCurve::QuadraticQuasiGauss(
-            UtilityCurveSampler::new_forward((math::curve::QuadraticInOutCurve {}).halfway_mirror())
+            UtilityCurveSampler::new_forward((QuadraticInOutCurve {}).halfway_mirror())
         )),
         "AntiQuadGauss" => Some(SupportedUtilityCurve::QuadraticQuasiGauss(
-            UtilityCurveSampler::new_inverse((math::curve::QuadraticInOutCurve {}).halfway_mirror())
+            UtilityCurveSampler::new_inverse((QuadraticInOutCurve {}).halfway_mirror())
         )),
         _ => None,
     }
@@ -1030,7 +1033,7 @@ pub trait AcceptsCurveRegistrations {
         IS: Into<String>
     >(
         &mut self, 
-        consideration: U, 
+        curve: U, 
         key: IS,
     ) -> &mut Self;
 }

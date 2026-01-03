@@ -1,21 +1,14 @@
 [package]
-name = "cortex-bevy-plugin"
+name = "cortex-test-plugin"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 bevy = { version = "0.17.3", features = ["dynamic_linking"] }
 cortex-core = {path = "../core"}
-cortex-actionset-loader = {path = "../actionset_loader", optional = true}
 
 [features]
 default = []
-
-# Also adds the ActionSetAssetPlugin from cortex-actionset-loader for you.
-include_actionset_loader = [
-    "cortex-actionset-loader"
-]
-
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

@@ -15,11 +15,14 @@ bevy = { version = "0.17.3", features = ["dynamic_linking"] }
 cortex-core = {path = "crates/core"}
 cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = true}
 cortex-actionset-loader = {path = "crates/actionset_loader", optional = true}
+cortex-test-plugin = {path = "crates/test_plugin", optional = true}
+
+[dev-dependencies]
+cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
+cortex-test-plugin = {path = "crates/test_plugin", optional = false}
 
 [features]
-default = [
-  "bevy_plugin",
-]
+default = []
 
 # Provides a way to load ActionSets as Assets from the filesystem.
 actionset_loader = [
@@ -43,7 +46,8 @@ bevy_native = [
 
 # Everything needed to run tests.
 testing = [
-  "cortex-bevy-plugin"
+  "cortex-test-plugin",
+  "cortex-bevy-plugin",
 ]
 
 all = [
