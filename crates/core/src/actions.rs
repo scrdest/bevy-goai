@@ -25,8 +25,8 @@
 //! 
 //! This is the core problem AI solves - given all ActionTemplates and all Contexts 
 //! available for them at a given moment, which combination to choose for execution?
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::reflect::Reflect;
 
 #[cfg(any(feature = "actionset_loader"))]
 use serde::{Serialize, Deserialize};
@@ -36,13 +36,14 @@ use crate::types::{self, ActionContextRef};
 use crate::identifiers::{ContextFetcherIdentifier};
 
 pub type ActionContext = Entity;
+pub type ActionKey = String;
 
 /// An Action is effectively an ActionTemplate + a selected ActionContext. 
 #[derive(Clone, Reflect, Debug)]
 pub struct Action {
     pub name: String,
     pub context: ActionContextRef,
-    pub action_key: String,
+    pub action_key: ActionKey,
 }
 
 #[derive(Clone, Reflect, Debug)]
@@ -81,7 +82,7 @@ pub struct ActionTemplate {
     pub context_fetcher_name: ContextFetcherIdentifier,
     pub considerations: Vec<ConsiderationData>,
     pub priority: types::ActionScore,
-    pub action_key: String,
+    pub action_key: ActionKey,
     // AI LODs: 
     pub lod_min: Option<types::AiLodLevelPrimitive>,
     pub lod_max: Option<types::AiLodLevelPrimitive>,

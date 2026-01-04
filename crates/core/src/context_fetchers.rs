@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use bevy::prelude::*;
+use bevy::platform::collections::HashMap;
 use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
 use crate::identifiers::ContextFetcherIdentifier;
 

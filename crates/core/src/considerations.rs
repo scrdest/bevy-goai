@@ -1,7 +1,8 @@
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::*;
+use bevy::platform::collections::HashMap;
+
 use crate::types::{self, ActionContextRef, AiEntity, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 

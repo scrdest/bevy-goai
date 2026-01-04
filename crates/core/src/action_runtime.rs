@@ -321,7 +321,7 @@ pub struct ActionTrackerSpawnedForTargetAI {
 
 /// Event handler for spawning ActionTrackers for Actions, 
 /// triggered by an ActionTrackerSpawnRequested Event.
-pub fn actiontracker_spawn_requested(
+pub fn actiontracker_triggered_spawner(
     trigger: On<ActionTrackerSpawnRequested>,
     mut commands: Commands,
     game_timer: Res<Time>,
@@ -396,7 +396,7 @@ pub struct ActionTrackerDespawnRequested {
 /// As each Tracker is its own unique Entity, this will clean up the whole bundle (including optional modules).
 /// 
 /// If you want to invoke callbacks on success/failure/etc., this should happen BEFORE this event is raised.
-pub fn actiontracker_despawn_requested(
+pub fn actiontracker_triggered_despawner(
     event: On<ActionTrackerDespawnRequested>,
     mut commands: Commands,
 ) {

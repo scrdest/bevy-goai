@@ -26,8 +26,8 @@ impl Plugin for CortexPlugin {
         .init_resource::<action_runtime::UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<smart_object::ActionSetStore>()
         .add_observer(action_runtime::create_tracker_for_picked_action)
-        .add_observer(action_runtime::actiontracker_spawn_requested)
-        .add_observer(action_runtime::actiontracker_despawn_requested)
+        .add_observer(action_runtime::actiontracker_triggered_spawner)
+        .add_observer(action_runtime::actiontracker_triggered_despawner)
         .add_observer(decision_loop::prepare_ai)
         .add_observer(decision_loop::decision_engine)
         .add_systems(

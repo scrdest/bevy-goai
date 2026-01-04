@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use bevy::prelude::*;
+use bevy::platform::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use serde_json;
 

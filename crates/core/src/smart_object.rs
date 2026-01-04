@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::platform::collections::HashMap;
 use crate::actionset::ActionSet;
 use crate::types;
 
@@ -30,7 +31,7 @@ use crate::types;
 
 #[derive(Resource, Default, Reflect)]
 pub struct ActionSetStore {
-    pub map_by_name: std::collections::HashMap<String, ActionSet>
+    pub map_by_name: HashMap<String, ActionSet>
 }
 
 

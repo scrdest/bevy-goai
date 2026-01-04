@@ -1,4 +1,4 @@
-use bevy::reflect::Reflect;
+use bevy::{platform::collections::Equivalent, reflect::Reflect};
 
 #[cfg(any(feature = "actionset_loader"))]
 use serde::{Deserialize, Serialize};
@@ -83,5 +83,11 @@ impl ActionState {
             Self::Running => true,
             _ => false,
         }
+    }
+}
+
+impl Equivalent<ActionState> for &ActionState {
+    fn equivalent(&self, key: &ActionState) -> bool {
+        self == &key
     }
 }

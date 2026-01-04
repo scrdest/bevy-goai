@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 use cortex::actions::{ActionTemplate};
@@ -21,16 +20,22 @@ const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
 #[derive(Debug, EntityEvent)]
 struct ExampleActionEvent{
-    /// NOTE: entity is expected to be an ActionTracker here.
-    entity: Entity, 
-    ctx: ActionContextRef,
+    entity: types::AiEntity, 
+    _pawn: types::PawnEntityRef, 
+    ctx: types::ActionContextRef,
     state: ActionState,
 }
 
 impl ExampleActionEvent {
-    fn from_context_ref(context: ActionContextRef, action_tracker: Entity, state: Option<ActionState>) -> Self {
+    fn from_context_ref(
+        context: ActionContextRef, 
+        ai: types::AiEntity, 
+        pawn: types::PawnEntityRef,
+        state: Option<ActionState>
+    ) -> Self {
         Self {
-            entity: action_tracker,
+            entity: ai,
+            _pawn: pawn,
             ctx: context,
             state: state.unwrap_or(ActionState::Ready),
         }
@@ -44,6 +49,7 @@ fn example_action_tracker_handler(
     mut query: Query<(
         Entity, 
         &ActionTracker, 
+        &ActionTrackerOwningAI, 
         &mut ActionTrackerState, 
         Option<&mut ActionTrackerTickTimer>
     ), With<ActionTrackerTicks>>,
@@ -51,11 +57,20 @@ fn example_action_tracker_handler(
     real_timer: Res<Time<Real>>,
     mut commands: Commands,
 ) {
-    for (tracker_ent, tracker, state, tick_timer) in query.iter_mut() {
+    bevy::log::debug!("example_action_tracker_handler: Running...");
+    for (tracker_ent, tracker, ai_tracker, state, tick_timer) in query.iter_mut() {
         if !state.0.should_process() {
-            bevy::log::debug!("Skipping processing for Action(Tracker) {:?} - {:?}", tracker.0.action.name, state.0);
+            bevy::log::debug!(
+                "example_action_tracker_handler - AI {:?}: Skipping processing for Action(Tracker) {:?} - {:?}", 
+                ai_tracker.owner_ai, tracker.0.action.name, state.0
+            );
             continue;
         }
+
+        bevy::log::debug!(
+            "example_action_tracker_handler: processing Action(Tracker) {:?} - {:?}", 
+            tracker.0.action.name, state.0
+        );
 
         if let Some(mut tick_timer_included) = tick_timer {
             let current_time_game = game_timer.elapsed();
@@ -76,6 +91,7 @@ fn example_action_tracker_handler(
                 commands.trigger(ExampleActionEvent::from_context_ref(
                     tracker.0.action.context.clone(),
                     tracker_ent,
+                    None,
                     Some(state.0),
                 ));
             },
@@ -90,6 +106,7 @@ fn example_action(
     context_data_qry: Query<&ExampleStateMapContextComponent>,
     mut tracker_state_qry: Query<(&ActionTracker, &mut ActionTrackerState)>,
 ) {
+    bevy::log::debug!("example_action: Running...");
     let event = trigger.event();
 
     let tracker = event.entity;
@@ -113,8 +130,8 @@ fn example_action(
                 "example_action for AI {:?} - Received an invalid Context {:?} ({:?})!", 
                 ai_owner, event.ctx, err,
             );
-            // panic!("Invalid context!");
-            return;
+            panic!("Invalid context!");
+            // return;
         }
     };
 

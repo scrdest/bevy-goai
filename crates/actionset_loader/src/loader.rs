@@ -1,7 +1,7 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 use cortex_core::actionset::{ActionSet};
