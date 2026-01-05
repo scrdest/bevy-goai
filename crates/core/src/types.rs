@@ -11,6 +11,7 @@ pub type UtilityCurveKey = String;
 pub type ActionKey = String;
 
 pub type ActionScore = f32;
+pub use crate::action_state::ActionState;
 
 pub const MIN_CONSIDERATION_SCORE: ActionScore = 0.;
 pub const MAX_CONSIDERATION_SCORE: ActionScore = 1.;

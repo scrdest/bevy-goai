@@ -143,3 +143,119 @@ impl PartialEq for ActionTemplate {
 
 impl Eq for ActionTemplate {}
 
+/// Convenience type-alias for the input type required from an ActionHandler. 
+pub type ActionHandlerInputs = (
+    types::AiEntity,
+    types::PawnEntityRef,
+    types::ActionContextRef,
+);
+
+/// Convenience type-alias for the output type required from an ActionHandler. 
+pub type ActionHandlerOutputs = ();
+
+/// Convenience type-alias for register-able ActionHandlers
+pub type ActionHandlerFn = dyn FnMut(ActionHandlerInputs, Commands) -> ();
+
+/// A 'guardrail' trait for Events that trigger your Action logic. 
+/// 
+/// This trait is not used as an actual bound in any Cortex code; 
+/// the point of it is to give you an interface which, once implemented, 
+/// will ensure you've got the basics covered for working with Actions 
+/// and a solid base for building simple ActionHandler functions quickly.
+pub trait ActionTriggerEvent: Event {
+    /// The event should be buildable from just the standardized inputs.
+    fn build_from_action_handler_inputs(inputs: ActionHandlerInputs) -> Self;
+
+    /// The event should be buildable and triggerable in an ActionHandler function. 
+    /// 
+    /// The simplest impl is `commands.trigger(Self::build_from_action_handler_inputs(inputs))`, 
+    /// but there's some extra bounds on Triggers that made it impossible to provide out of the box. 
+    fn trigger_from_action_handler(inputs: ActionHandlerInputs, commands: Commands);
+}
+
+/// A thin wrapper over an ActionHandler function.
+pub struct ActionPickCallback(Box<ActionHandlerFn>);
+
+impl ActionPickCallback {
+    pub fn new<F: FnMut(ActionHandlerInputs, Commands) -> () + 'static>(func: F) -> Self {
+        Self(Box::new(func))
+    }
+
+    pub fn call(&mut self, inputs: ActionHandlerInputs, commands: Commands) {
+        self.0(inputs, commands)
+    }
+}
+
+#[derive(Default)]
+pub struct ActionHandlerKeyToSystemMap {
+    pub mapping: HashMap<
+        types::ActionKey, 
+        ActionPickCallback,
+    >
+}
+
+
+/// Something that allows us to register a ActionHandler to the World. 
+/// 
+/// Note that for convenience, the first registration attempt 
+/// will initialize *an empty registry* if one does not exist yet, so
+/// you don't need to use `app.initialize_resource::<UtilityCurveRegistry>()` 
+/// unless you want to be explicit about it.
+pub trait AcceptsActionHandlerRegistrations {
+    fn register_action_handler<
+        IS: Into<String>,
+    >(
+        &mut self, 
+        trigger_fn: ActionPickCallback, 
+        key: IS,
+    ) -> &mut Self;
+}
+
+impl AcceptsActionHandlerRegistrations for App {
+    fn register_action_handler<
+        IS: Into<String>,
+    >(
+        &mut self, 
+        trigger_fn: ActionPickCallback, 
+        key: IS,
+    ) -> &mut Self{
+        self.world_mut().register_action_handler(trigger_fn, key);
+        self
+    }
+}
+
+impl AcceptsActionHandlerRegistrations for World {
+    fn register_action_handler<
+        IS: Into<String>,
+    >(
+        &mut self, 
+        trigger_fn: ActionPickCallback, 
+        key: IS,
+    ) -> &mut Self {
+        let system_key: ActionKey = key.into();
+        let cell = self.as_unsafe_world_cell();
+
+        let mut system_registry = match unsafe { cell.world_mut() }.get_non_send_resource_mut::<ActionHandlerKeyToSystemMap>() {
+            Some(registry) => registry,
+            None => {
+                unsafe { cell.world_mut() }.insert_non_send_resource(ActionHandlerKeyToSystemMap::default());
+                unsafe { cell.world_mut() }.get_non_send_resource_mut::<ActionHandlerKeyToSystemMap>().unwrap()
+            }
+        };
+
+        let old = system_registry.mapping.insert(
+            system_key.to_owned(), 
+            trigger_fn
+        );
+        match old {
+            None => {},
+            Some(_) => {
+                bevy::log::warn!(
+                    "Detected a key collision for key {:?}. Ejecting previous registration...",
+                    system_key
+                );
+            } 
+        }
+        self
+    }
+}

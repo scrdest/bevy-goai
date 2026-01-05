@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 
 use bevy::prelude::*;
 
+use crate::actions;
 use crate::ai::{AIController};
 use crate::context_fetchers::{ContextFetcherKeyToSystemMap, ShouldReinitCfQueries};
 use crate::considerations::{ConsiderationKeyToSystemMap, ShouldReinitConsiderationQueries};
@@ -664,3 +665,61 @@ pub fn decision_engine(
     }
 }
 
+pub fn trigger_dispatch_to_user_actions(
+    trigger: On<crate::events::AiActionPicked>,
+    mut writer: MessageWriter<crate::events::AiActionDispatchToUserCode>,
+) {
+    let event = trigger.event();
+    let action_key = &event.action_key;
+    bevy::log::debug!(
+        "dispatch_to_user_actions - Running for Action {:?} for Pick Event {:?}",
+        action_key, event
+    );
+
+    let message = crate::events::AiActionDispatchToUserCode::new(
+        event.entity, 
+        action_key.to_owned(), 
+        event.action_name.to_owned(), 
+        event.action_context, 
+        event.action_score
+    );
+    writer.write(message);
+}
+
+pub fn handle_dispatch_to_user_actions(
+    pawn_query: Query<Option<&Pawn>>,
+    mut commands: Commands,
+    mut reader: MessageReader<crate::events::AiActionDispatchToUserCode>,
+    mut callback_registry: NonSendMut<actions::ActionHandlerKeyToSystemMap>,
+) {
+    for msg in reader.read() {
+        let action_key = &msg.action_key;
+    
+        bevy::log::debug!(
+            "dispatch_to_user_actions - Running for Action {:?} for message {:?}",
+            &action_key, &msg
+        );
+
+        let callback = match callback_registry.mapping.get_mut(action_key) {
+            Some(cb) => cb,
+            None => {
+                bevy::log::error!(
+                    "dispatch_to_user_actions - Could not resolve ActionKey {:?} to a registered ActionPickCallback, skipping!",
+                    action_key
+                );
+                continue;
+            }
+        };
+
+        let ai = msg.entity;
+        let ctx = msg.action_context;
+        let pawn = pawn_query
+            .get(ai)
+            .ok().flatten()
+            .map(|p| p.clone().to_entity())
+            .flatten()
+        ;
+
+        callback.call((ai, pawn, ctx), commands.reborrow());
+    }
+}

@@ -1,121 +1,61 @@
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
-use cortex::actions::{ActionTemplate};
-use cortex::action_runtime::*;
-use cortex::action_state::ActionState;
-use cortex::actionset::ActionSet;
-use cortex::ai::AIController;
-use cortex::context_fetchers::{AcceptsContextFetcherRegistrations};
-use cortex::considerations::{ConsiderationData, AcceptsConsiderationRegistrations};
-use cortex::curves::{AcceptsCurveRegistrations, LinearCurve, UtilityCurveExt};
-use cortex::events;
-use cortex::types::{self, ActionContextRef, ActionScore, ConsiderationOutputs, ThreadSafeRef};
-use cortex::smart_object::{ActionSetStore, SmartObjects};
-
+// These two imports should keep you covered for day-to-day usage.
+// The CortexPlugin is in the Prelude with the right features enabled, but it doesn't work here fsr. 
+use cortex::prelude::*;
 use cortex_bevy_plugin::CortexPlugin;
+
+// These imports are needed for setting up stuff behind the scenes. 
+// In a normal setup, you usually shouldn't need to import these.
+use cortex::action_runtime::{ActionTrackerState};
+use cortex::actionset::ActionSet;
+use cortex::considerations::{ConsiderationData};
+use cortex::curves::{LinearCurve, UtilityCurveExt};
+use cortex::smart_object::{ActionSetStore};
 use cortex_test_plugin::CortexTestPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
 #[derive(Debug, EntityEvent)]
 struct ExampleActionEvent{
-    entity: types::AiEntity, 
-    _pawn: types::PawnEntityRef, 
-    ctx: types::ActionContextRef,
-    state: ActionState,
+    entity: AiEntity, 
+    _pawn: PawnEntityRef, 
+    ctx: ActionContextRef,
 }
 
 impl ExampleActionEvent {
     fn from_context_ref(
         context: ActionContextRef, 
-        ai: types::AiEntity, 
-        pawn: types::PawnEntityRef,
-        state: Option<ActionState>
+        ai: AiEntity, 
+        pawn: PawnEntityRef,
     ) -> Self {
         Self {
             entity: ai,
             _pawn: pawn,
             ctx: context,
-            state: state.unwrap_or(ActionState::Ready),
-        }
-    }
-}
-
-/// Mockup of user application code - dispatches actual execution Events 
-/// based on the key in the library Event to user-implemented Action Systems.
-/// This specific implementation uses the tick-based Action processing API.
-fn example_action_tracker_handler(
-    mut query: Query<(
-        Entity, 
-        &ActionTracker, 
-        &ActionTrackerOwningAI, 
-        &mut ActionTrackerState, 
-        Option<&mut ActionTrackerTickTimer>
-    ), With<ActionTrackerTicks>>,
-    game_timer: Res<Time>,
-    real_timer: Res<Time<Real>>,
-    mut commands: Commands,
-) {
-    bevy::log::debug!("example_action_tracker_handler: Running...");
-    for (tracker_ent, tracker, ai_tracker, state, tick_timer) in query.iter_mut() {
-        if !state.0.should_process() {
-            bevy::log::debug!(
-                "example_action_tracker_handler - AI {:?}: Skipping processing for Action(Tracker) {:?} - {:?}", 
-                ai_tracker.owner_ai, tracker.0.action.name, state.0
-            );
-            continue;
-        }
-
-        bevy::log::debug!(
-            "example_action_tracker_handler: processing Action(Tracker) {:?} - {:?}", 
-            tracker.0.action.name, state.0
-        );
-
-        if let Some(mut tick_timer_included) = tick_timer {
-            let current_time_game = game_timer.elapsed();
-            let current_time_real = real_timer.elapsed();
-
-            let new_value = TimeInstantActionTracker::VirtualAndReal((
-                current_time_game, current_time_real
-            ));
-
-            tick_timer_included.last_tick_time = Some(new_value);
-        }
-        
-        let action_key = &tracker.0.action.action_key;
-
-        match action_key.as_str() {
-            "e2e::ExampleAction" => {
-                bevy::log::info!("Triggering a ExampleActionEvent...");
-                commands.trigger(ExampleActionEvent::from_context_ref(
-                    tracker.0.action.context.clone(),
-                    tracker_ent,
-                    None,
-                    Some(state.0),
-                ));
-            },
-            _ => {}
         }
     }
 }
 
 fn example_action(
     trigger: On<ExampleActionEvent>, 
-    associated_ai_qry: Query<(&ActionTracker, &ActionTrackerOwningAI)>,
+    associated_ai_qry: Query<NameOrEntity, With<AIController>>,
     context_data_qry: Query<&ExampleStateMapContextComponent>,
-    mut tracker_state_qry: Query<(&ActionTracker, &mut ActionTrackerState)>,
+    mut tracker_state_qry: Query<&mut ActionTrackerState>,
+    mut commands: Commands, 
 ) {
-    bevy::log::debug!("example_action: Running...");
     let event = trigger.event();
+    bevy::log::debug!("example_action: Running, trigger: {:?}", event);
 
-    let tracker = event.entity;
+    let ai_entity = event.entity;
 
-    let maybe_tracker_state = tracker_state_qry.get_mut(tracker);
+    let maybe_tracker_state = tracker_state_qry.get_mut(ai_entity);
+    
     let maybe_ai_owner = associated_ai_qry
-        .get(tracker)
+        .get(ai_entity)
         .ok()
-        .map(|bundle| &bundle.1.owner_ai)
+        .map(|bundle| bundle)
     ;
 
     let ai_owner = maybe_ai_owner
@@ -136,15 +76,22 @@ fn example_action(
     };
 
     let state_mapping = &context_data.statemap;
-    let state = &event.state;
 
-    bevy::log::info!("example_action for AI {:?} - Current state is {:?}", ai_owner, state);
+    let curr_state = match maybe_tracker_state.as_ref() {
+        Ok(state) => state.0.clone(),
+        Err(err) => {
+            bevy::log::info!("Could not find a State for AI {:?} - {:?}", ai_entity, err);
+            ActionState::Ready
+        },
+    };
 
-    let new = match state_mapping.get(&state) {
+    bevy::log::info!("example_action for AI {:?} - Current state is {:?}", ai_owner, curr_state);
+
+    let new = match state_mapping.get(&curr_state) {
         None => {
             bevy::log::error!(
                 "example_action for AI {:?} - could not find a mapped target state for current state {:?}, aborting!", 
-                ai_owner, state
+                ai_owner, curr_state
             );
             return;
         },
@@ -154,9 +101,20 @@ fn example_action(
     bevy::log::info!("example_action for AI {:?}: New state is {:?}", ai_owner, new);
 
     match maybe_tracker_state {
-        Err(err) => bevy::log::debug!("ActionTracker does not exist: {:?}", err),
-        Ok((upd_tracker, mut state)) => { 
-            bevy::log::debug!("example_action for AI {:?}: Updating the ActionTracker {:?} state to new value {:?}", ai_owner, upd_tracker, new);
+        Err(err) => {
+            bevy::log::debug!("example_action: ActionTracker does not exist: {:?}", err);
+            match commands.get_entity(ai_entity) {
+                Err(err) => {
+                    bevy::log::error!("AI {:?} does not exist??? - {:?}", ai_entity, err);
+                }
+                Ok(mut cmds) => {
+                    bevy::log::debug!("Inserting new ActionState for AI {:?} - {:?}", ai_entity, new);
+                    cmds.insert(ActionTrackerState(*new));
+                }
+            }
+        }
+        Ok(mut state) => { 
+            bevy::log::debug!("example_action for AI {:?}: Updating the state to new value {:?}", ai_owner, new);
             state.set_state(*new);
         },
     }
@@ -188,9 +146,9 @@ pub struct DumbMarker;
 
 /// A ContextFetcher that returns Entities with an ExampleStateMapContextComponent
 fn example_context_fetcher(
-    inp: crate::types::ContextFetcherInputs,
+    inp: ContextFetcherInputs,
     context_data_qry: Query<Entity, With<ExampleStateMapContextComponent>>,
-) -> crate::types::ContextFetcherOutputs {
+) -> ContextFetcherOutputs {
     bevy::log::debug!("example_context_fetcher triggered for AI {:?}", inp.0.0);
     context_data_qry.iter().collect()
 }
@@ -267,7 +225,7 @@ fn setup_example_entity(
 
     let ai_id = spawned.id();
 
-    commands.trigger(events::AiDecisionRequested { 
+    commands.trigger(AiDecisionRequested { 
         entity: ai_id,  
         smart_objects: Some(new_sos),
     });
@@ -276,19 +234,18 @@ fn setup_example_entity(
 fn setup_default_action_tracker_config(
     mut config_res: ResMut<UserDefaultActionTrackerSpawnConfig>
 ) {
-    let new_config = 
-        ActionTrackerSpawnConfigBuilder::new()
+    config_res.with_config_builder(|builder|
+        builder
         .set_use_ticker(true)
         .set_use_timers(false)
-    ;
-    config_res.config = Some(new_config.build());
+    );
 }
 
 
 fn example_consideration_one(
-    _inputs: types::ConsiderationInputs,
+    _inputs: ConsiderationInputs,
     qry: Query<&ActionTrackerState>
-) -> types::ConsiderationOutputs {
+) -> ConsiderationOutputs {
     let mut good_cnt = 0;
     let mut bad_cnt = 0;
 
@@ -312,8 +269,8 @@ fn example_consideration_one(
 
 /// Trivial Consideration, returns a flat value.
 fn example_consideration_two(
-    _inputs: types::ConsiderationInputs,
-) -> types::ConsiderationOutputs {
+    _inputs: ConsiderationInputs,
+) -> ConsiderationOutputs {
     0.9.into()
 }
 
@@ -325,7 +282,7 @@ fn example_consideration_two(
 /// - To select spawn locations a minimum distance away from the player
 /// - To cheaply pre-filter locations for pathfinding or raycasting Considerations downstream
 fn example_consideration_three(
-    inputs: types::ConsiderationInputs,
+    inputs: ConsiderationInputs,
     qry: Query<&Position2d>
 ) -> ConsiderationOutputs {
     
@@ -372,6 +329,22 @@ fn example_consideration_three(
 }
 
 
+fn example_action_handler(
+    inputs: ActionHandlerInputs,
+    mut commands: Commands, 
+) {
+    bevy::log::info!("Triggering a ExampleActionEvent w/ inputs {:?}...", &inputs);
+    let (ai, pawn, ctx) = inputs;
+    commands.trigger(
+        ExampleActionEvent::from_context_ref(
+            ctx,
+            ai,
+            pawn,
+        )
+    );
+}
+
+
 fn main() {
     let mut app = App::new();
 
@@ -384,6 +357,9 @@ fn main() {
     
     // Configures the app to shut down once all Actions are finished at the end of a tick, plus logs and such:
     .add_plugins(CortexTestPlugin)
+    
+    // We'll use 'ticking' Actions (a'la Update() method on non-ECS GameObjects) for this demo.
+    .add_plugins(TickBasedActionTrackerPlugin)
 
     // Registering Considerations/ContextFetchers/Curves.
     //
@@ -395,6 +371,10 @@ fn main() {
     .register_consideration(example_consideration_three, "e2e::DistanceToPawn2d")
     .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME)
     .register_utility_curve(leaky_curve, "e2e::Linear50pHardLeak")
+    .register_action_handler(
+        ActionPickCallback::new(example_action_handler), 
+        "e2e::ExampleAction"
+    )
     
     // Setting up various demo Entities
     .add_systems(Startup, (
@@ -403,10 +383,7 @@ fn main() {
         setup_default_action_tracker_config,
     ))
 
-    // Handling Actions
-    .add_systems(FixedUpdate, (
-        example_action_tracker_handler,
-    ).chain())
+    // Setting up an Observer for our Action.
     .add_observer(example_action)
     ;
 

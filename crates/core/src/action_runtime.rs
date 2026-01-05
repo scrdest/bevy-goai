@@ -1,6 +1,9 @@
 use bevy::prelude::*;
+
 use crate::actions::{Action, ScoredAction};
 use crate::action_state::ActionState;
+use crate::types;
+use crate::events;
 
 
 // Action Execution
@@ -232,7 +235,7 @@ impl ActionTrackerSpawnConfigBuilder {
     /// Creates a new builder using an existing config as a starting point.
     /// This means the values are preconfigured to match the existing config, 
     /// but you can modify them freely before turning this into a new config.
-    pub fn from_reference_config(config: ActionTrackerSpawnConfig) -> Self {
+    pub fn from_reference_config(config: &ActionTrackerSpawnConfig) -> Self {
         Self {
             track_owner_ai: Some(config.track_owner_ai),
             use_ticker: Some(config.use_ticker),
@@ -251,8 +254,8 @@ impl Into<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
     }
 }
 
-impl From<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
-    fn from(value: ActionTrackerSpawnConfig) -> Self {
+impl From<&ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
+    fn from(value: &ActionTrackerSpawnConfig) -> Self {
         Self::from_reference_config(value)
     }
 }
@@ -263,7 +266,7 @@ impl From<ActionTrackerSpawnConfig> for ActionTrackerSpawnConfigBuilder {
 pub struct ActionTrackerSpawnRequested {
     /// NOTE: The entity here is intended to be the AIController.
     ///       EntityEvent API sadly doesn't let us rename that for clarity.
-    pub entity: Entity, 
+    pub entity: types::AiEntity, 
     pub action: ScoredAction, 
     pub tracker_config: Option<ActionTrackerSpawnConfig>,
 }
@@ -271,7 +274,10 @@ pub struct ActionTrackerSpawnRequested {
 impl ActionTrackerSpawnRequested {
     /// Create a new ActionTracker spawn request.
     pub fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
-        bevy::log::debug!("ActionTrackerSpawnRequested::new(): Creating a new ActionTrackerSpawnRequested event for {:?}", action);
+        bevy::log::debug!(
+            "ActionTrackerSpawnRequested::new(): Creating a new ActionTrackerSpawnRequested event for Entity {:?} w/ Action {:?}", 
+            entity, action
+        );
 
         Self {
             entity: entity, 
@@ -330,57 +336,68 @@ pub fn actiontracker_triggered_spawner(
     let event = trigger.event();
     let owner_ai = event.entity;
 
-    let mut tracker = commands.spawn((
-        ActionTracker(event.action.clone()),
-        ActionTrackerState::ready(),
-    ));
+    match commands.get_entity(owner_ai) {
+        Err(err) => {
+            bevy::log::warn!(
+                "Attempted to spawn an ActionTracker for an AI Entity ({:?}) that no longer exists - {:?}",
+                owner_ai, err
+            )
+        }
 
-    let spawn_config = match &event.tracker_config {
-        Some(config) => config,
-        None => &ActionTrackerSpawnConfig::builder().build()
-    };
+        Ok(mut ai_cmds) => {
+            ai_cmds.insert((
+                ActionTracker(event.action.clone()),
+                ActionTrackerState::ready(),
+            ));
 
-    if spawn_config.track_owner_ai {
-        tracker.insert(ActionTrackerOwningAI {
-            owner_ai: event.entity.into()
-        });
+            let spawn_config = match &event.tracker_config {
+                Some(config) => config,
+                None => &ActionTrackerSpawnConfig::builder().build()
+            };
+
+            if spawn_config.track_owner_ai {
+                ai_cmds.insert(ActionTrackerOwningAI {
+                    owner_ai: event.entity.into()
+                });
+            }
+
+            if spawn_config.use_ticker {
+                // Add ticking to this ActionTracker.
+                // The Component for this is just a marker, pretty trivial.
+                ai_cmds.insert(ActionTrackerTicks);
+            }
+
+            // Add timing components.
+            // 
+            // For now we'll use unwrapped elapsed Durations for this as a standard.
+            // Real time in particular may span DAYS for reloads, so wrapping it may cause serious artifacts.
+            // Duration is u64-based; you may get issues if you leave your game running for 585 billion years.
+            if spawn_config.use_create_timer {
+                let virtual_spawn_time = game_timer.elapsed();
+                let real_spawn_time = real_timer.elapsed();
+
+                ai_cmds.insert(ActionTrackerCreationTimer {
+                    creation_time: TimeInstantActionTracker::VirtualAndReal((virtual_spawn_time, real_spawn_time))
+                });
+            }
+
+            if spawn_config.use_runtime_timer {
+                // The Action hasn't started yet, so they will both be None for now.
+                ai_cmds.insert(ActionTrackerRuntimeTimer::default());
+            }
+
+            if spawn_config.use_tick_timer {
+                // The Action hasn't been ticked, so starts as None.
+                ai_cmds.insert(ActionTrackerTickTimer::default());
+            }
+
+            // Send a friendly PSA that we have created this Entity for downstream users to hook into.
+            ai_cmds.trigger(|atracker| ActionTrackerSpawnedForTargetAI { 
+                entity: owner_ai,
+                action_tracker: atracker,
+            });
+        }
     }
-
-    if spawn_config.use_ticker {
-        // Add ticking to this ActionTracker.
-        // The Component for this is just a marker, pretty trivial.
-        tracker.insert(ActionTrackerTicks);
-    }
-
-    // Add timing components.
-    // 
-    // For now we'll use unwrapped elapsed Durations for this as a standard.
-    // Real time in particular may span DAYS for reloads, so wrapping it may cause serious artifacts.
-    // Duration is u64-based; you may get issues if you leave your game running for 585 billion years.
-    if spawn_config.use_create_timer {
-        let virtual_spawn_time = game_timer.elapsed();
-        let real_spawn_time = real_timer.elapsed();
-
-        tracker.insert(ActionTrackerCreationTimer {
-            creation_time: TimeInstantActionTracker::VirtualAndReal((virtual_spawn_time, real_spawn_time))
-        });
-    }
-
-    if spawn_config.use_runtime_timer {
-        // The Action hasn't started yet, so they will both be None for now.
-        tracker.insert(ActionTrackerRuntimeTimer::default());
-    }
-
-    if spawn_config.use_tick_timer {
-        // The Action hasn't been ticked, so starts as None.
-        tracker.insert(ActionTrackerTickTimer::default());
-    }
-
-    // Send a friendly PSA that we have created this Entity for downstream users to hook into.
-    tracker.trigger(|atracker| ActionTrackerSpawnedForTargetAI { 
-        entity: owner_ai,
-        action_tracker: atracker,
-    });
 }
 
 
@@ -438,9 +455,35 @@ pub fn actiontracker_done_cleanup_system(
 /// a lot of boilerplate.
 /// 
 /// Note that you can still always override this config for individual exceptional cases.
+/// 
+/// The provided [`with_config_builder()`] method allows you to conveniently customize the 
+/// resource by passing a closure that can mutate the ActionTrackerSpawnConfigBuilder.
 #[derive(Default, Resource)]
 pub struct UserDefaultActionTrackerSpawnConfig {
     pub config: Option<ActionTrackerSpawnConfig>
+}
+
+impl UserDefaultActionTrackerSpawnConfig {
+    /// Convenience function for setting up your user default config.
+    /// 
+    /// Creates a new Config Builder seeded with current config values (or defaults, if none set up), 
+    /// then passes it over to the provided FnOnce closure for you to mutate away as you pleas before 
+    /// returning the configured result. 
+    /// 
+    /// The builder then builds and stores the configuration for you.
+    pub fn with_config_builder<F: FnOnce(ActionTrackerSpawnConfigBuilder) -> ActionTrackerSpawnConfigBuilder>(
+        &mut self, 
+        builder: F
+    ) -> &mut Self {
+        let config_builder = match &self.config {
+            None => ActionTrackerSpawnConfigBuilder::new(),
+            Some(preexisting) => ActionTrackerSpawnConfigBuilder::from_reference_config(preexisting) 
+        };
+        let configured = builder(config_builder);
+        let built = configured.build();
+        self.config = Some(built);
+        self
+    }
 }
 
 /// A batteries-included solution for creating ActionTrackers for your Actions.
@@ -474,6 +517,92 @@ pub fn create_tracker_for_picked_action(
         )
     );
 }
+
+/// A System that processes and updates `ActionTrackers` to trigger `Actions`.
+/// 
+/// This particular implementation uses tick-based [`Action`] processing.
+fn tick_based_action_tracker_handler(
+    mut query: Query<(
+        Entity,
+        &ActionTracker, 
+        Option<&mut ActionTrackerState>, 
+        Option<&mut ActionTrackerTickTimer>
+    ), With<ActionTrackerTicks>>,
+    mut dispatch_writer: MessageWriter<events::AiActionDispatchToUserCode>,
+    game_timer: Res<Time>,
+    real_timer: Res<Time<Real>>,
+) {
+    bevy::log::debug!(
+        "tick_based_action_tracker_handler - Running...", 
+    );
+
+    for (ai, tracker, maybe_state, tick_timer) in query.iter_mut() {
+        let should_process = maybe_state.as_ref().map(|state| state.0.should_process()).unwrap_or(true);
+        
+        if !should_process {
+            bevy::log::debug!(
+                "tick_based_action_tracker_handler - AI {:?}: Skipping processing for Action(Tracker) {:?} - {:?}", 
+                ai, tracker.0.action.name, maybe_state
+            );
+            continue;
+        }
+
+        bevy::log::debug!(
+            "tick_based_action_tracker_handler: processing Action(Tracker) {:?} for {:?} - {:?}", 
+            tracker.0.action.name, ai, maybe_state
+        );
+
+        if let Some(mut tick_timer_included) = tick_timer {
+            let current_time_game = game_timer.elapsed();
+            let current_time_real = real_timer.elapsed();
+
+            let new_value = TimeInstantActionTracker::VirtualAndReal((
+                current_time_game, current_time_real
+            ));
+
+            tick_timer_included.last_tick_time = Some(new_value);
+        }
+
+        let message = events::AiActionDispatchToUserCode::new(
+            ai, 
+            tracker.0.action.action_key.to_owned(), 
+            tracker.0.action.name.to_owned(), 
+            tracker.0.action.context, 
+            tracker.0.score
+        );
+
+        dispatch_writer.write(message);
+    }
+}
+
+/// Sets up the application to use 'ticker'-style Actions backed by ActionTrackers. 
+/// 
+/// The application will process all running ActionTrackers with 'ticked' Actions 
+/// and trigger whichever ActionHandler function you have registered for a registry 
+/// key matching the processed Action's own key/ 
+/// 
+/// These in turn should trigger your own Events you wired your Action implementations 
+/// to observe, or some equivalent alternative dispatch implementation method like Messages.
+/// 
+/// Any picked Actions whose key cannot be resolved to a registered ActionHandler 
+/// mapping will be skipped and will not process, nor will any Action in a 
+/// terminal state (i.e. - success, failure, cancelled, etc.)
+/// 
+/// This is a separate plugin, as you may or may not want to use this particular 
+/// implementation style for your own applications.
+pub struct TickBasedActionTrackerPlugin;
+
+impl Plugin for TickBasedActionTrackerPlugin {
+    fn build(&self, app: &mut App) {
+        app
+        .add_systems(
+            FixedPostUpdate, 
+            tick_based_action_tracker_handler
+        )
+        ;
+    }
+}
+
 
 // #[cfg(test)]
 // mod tests {

@@ -105,6 +105,22 @@ pub trait AcceptsContextFetcherRegistrations {
     ) -> &mut Self;
 }
 
+impl AcceptsContextFetcherRegistrations for App {
+    fn register_context_fetcher<
+        CS: ContextFetcherSystem, 
+        Marker, 
+        F: IntoContextFetcherSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
+    >(
+        &mut self, 
+        context_fetcher: F, 
+        key: IS,
+    ) -> &mut Self {
+        self.world_mut().register_context_fetcher(context_fetcher, key);
+        self
+    }
+}
+
 impl AcceptsContextFetcherRegistrations for World {
     fn register_context_fetcher<
         CS: ContextFetcherSystem, 
@@ -133,22 +149,6 @@ impl AcceptsContextFetcherRegistrations for World {
                 );
             } 
         }
-        self
-    }
-}
-
-impl AcceptsContextFetcherRegistrations for App {
-    fn register_context_fetcher<
-        CS: ContextFetcherSystem, 
-        Marker, 
-        F: IntoContextFetcherSystem<Marker, System = CS> + 'static,
-        IS: Into<String>,
-    >(
-        &mut self, 
-        context_fetcher: F, 
-        key: IS,
-    ) -> &mut Self {
-        self.world_mut().register_context_fetcher(context_fetcher, key);
         self
     }
 }

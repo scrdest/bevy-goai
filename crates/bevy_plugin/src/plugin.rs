@@ -25,14 +25,17 @@ impl Plugin for CortexPlugin {
         ))
         .init_resource::<action_runtime::UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<smart_object::ActionSetStore>()
+        .add_message::<cortex_core::events::AiActionDispatchToUserCode>()
         .add_observer(action_runtime::create_tracker_for_picked_action)
         .add_observer(action_runtime::actiontracker_triggered_spawner)
         .add_observer(action_runtime::actiontracker_triggered_despawner)
         .add_observer(decision_loop::prepare_ai)
         .add_observer(decision_loop::decision_engine)
+        // .add_observer(decision_loop::trigger_dispatch_to_user_actions)
         .add_systems(
             FixedPostUpdate, 
             (
+                decision_loop::handle_dispatch_to_user_actions,
                 action_runtime::actiontracker_done_cleanup_system,
             ).chain()
         )

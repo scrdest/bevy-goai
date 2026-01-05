@@ -151,6 +151,22 @@ pub trait AcceptsConsiderationRegistrations {
     ) -> &mut Self;
 }
 
+impl AcceptsConsiderationRegistrations for App {
+    fn register_consideration<
+        CS: ConsiderationSystem, 
+        Marker, 
+        F: IntoConsiderationSystem<Marker, System = CS> + 'static,
+        IS: Into<String>,
+    >(
+        &mut self, 
+        consideration: F, 
+        key: IS
+    ) -> &mut Self {
+        self.world_mut().register_consideration(consideration, key);
+        self
+    }
+}
+
 impl AcceptsConsiderationRegistrations for World {
     fn register_consideration<
         CS: ConsiderationSystem, 
@@ -179,22 +195,6 @@ impl AcceptsConsiderationRegistrations for World {
                 );
             } 
         }
-        self
-    }
-}
-
-impl AcceptsConsiderationRegistrations for App {
-    fn register_consideration<
-        CS: ConsiderationSystem, 
-        Marker, 
-        F: IntoConsiderationSystem<Marker, System = CS> + 'static,
-        IS: Into<String>,
-    >(
-        &mut self, 
-        consideration: F, 
-        key: IS
-    ) -> &mut Self {
-        self.world_mut().register_consideration(consideration, key);
         self
     }
 }

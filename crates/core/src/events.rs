@@ -90,6 +90,64 @@ pub struct AiDecisionInitiated {
 }
 
 
+/// An Event that signals that Cortex is handing off to the user code by running 
+/// any registered ActionHandlers.
+/// 
+/// Primarily used as a trigger to kick off a System that handles calling an appropriate 
+/// user function from the registry - the registry is NonSend, so we are doing this in 
+/// a separate System to not force the main decision logic to run on the main thread.
+#[derive(Message, Debug)]
+pub struct AiActionDispatchToUserCode {
+    /// The AI that picked this Action for execution. 
+    pub entity: Entity,
+
+    /// Identifier for the handling event (e.g. "GoTo"). 
+    /// This is effectively a link to the *implementation* of the action. 
+    pub action_key: crate::types::ActionKey,
+
+    /// Human-readable primary identifier; one action_key may handle distinct action_names 
+    /// (e.g. action_key "GoTo" may cover action_names "Walk", "Run", "Flee", etc.).
+    /// In other words, this is what this action represents *semantically*, and is less likely
+    /// to change for technical purposes.
+    pub action_name: String,
+
+    /// The Context of the Action, i.e. the static input(s) we scored against.
+    pub action_context: crate::types::ActionContextRef,
+
+    /// The Utility score; this is so that we can decide whether to possibly 
+    /// override this with a higher-priority Action later on.
+    pub action_score: crate::types::ActionScore,
+}
+
+impl AiActionDispatchToUserCode {
+    pub fn new(
+        ai_owner: Entity,
+        action_key: crate::types::ActionKey,
+        action_name: String,
+        action_context: ActionContext,
+        action_score: crate::types::ActionScore,
+    ) -> Self {
+        
+        bevy::log::debug!(
+            "Creating a new AiActionDispatchToUserCode event for {:?} with key {:?} ({:?})",
+            ai_owner,
+            action_key,
+            action_name
+        );
+
+        let wrapped_ctx = action_context;
+
+        Self {
+            entity: ai_owner,
+            action_key: action_key,
+            action_name: action_name,
+            action_context: wrapped_ctx,
+            action_score: action_score,
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use bevy::log::LogPlugin;
