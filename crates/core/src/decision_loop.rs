@@ -690,7 +690,7 @@ pub fn handle_dispatch_to_user_actions(
     pawn_query: Query<Option<&Pawn>>,
     mut commands: Commands,
     mut reader: MessageReader<crate::events::AiActionDispatchToUserCode>,
-    mut callback_registry: NonSendMut<actions::ActionHandlerKeyToSystemMap>,
+    mut callback_registry: ResMut<actions::ActionHandlerKeyToSystemMap>,
 ) {
     for msg in reader.read() {
         let action_key = &msg.action_key;

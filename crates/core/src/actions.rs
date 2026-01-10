@@ -154,7 +154,7 @@ pub type ActionHandlerInputs = (
 pub type ActionHandlerOutputs = ();
 
 /// Convenience type-alias for register-able ActionHandlers
-pub type ActionHandlerFn = dyn FnMut(ActionHandlerInputs, Commands) -> ();
+pub type ActionHandlerFn = dyn Send + Sync + FnMut(ActionHandlerInputs, Commands) -> ();
 
 /// A 'guardrail' trait for Events that trigger your Action logic. 
 /// 
@@ -177,7 +177,7 @@ pub trait ActionTriggerEvent: Event {
 pub struct ActionPickCallback(Box<ActionHandlerFn>);
 
 impl ActionPickCallback {
-    pub fn new<F: FnMut(ActionHandlerInputs, Commands) -> () + 'static>(func: F) -> Self {
+    pub fn new<F: Send + Sync + FnMut(ActionHandlerInputs, Commands) -> () + 'static>(func: F) -> Self {
         Self(Box::new(func))
     }
 
@@ -186,7 +186,7 @@ impl ActionPickCallback {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct ActionHandlerKeyToSystemMap {
     pub mapping: HashMap<
         types::ActionKey, 
@@ -238,8 +238,8 @@ impl AcceptsActionHandlerRegistrations for World {
         let mut system_registry = match unsafe { cell.world_mut() }.get_non_send_resource_mut::<ActionHandlerKeyToSystemMap>() {
             Some(registry) => registry,
             None => {
-                unsafe { cell.world_mut() }.insert_non_send_resource(ActionHandlerKeyToSystemMap::default());
-                unsafe { cell.world_mut() }.get_non_send_resource_mut::<ActionHandlerKeyToSystemMap>().unwrap()
+                unsafe { cell.world_mut() }.init_resource::<ActionHandlerKeyToSystemMap>();
+                unsafe { cell.world_mut() }.get_resource_mut::<ActionHandlerKeyToSystemMap>().unwrap()
             }
         };
 
