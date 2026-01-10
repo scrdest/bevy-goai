@@ -1,4 +1,3 @@
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 // These two imports should keep you covered for day-to-day usage.
@@ -138,7 +137,7 @@ impl Position2d {
 /// Action which will use the mapping to figure out its next State by lookup.
 #[derive(Component, Default, Debug, Clone)]
 struct ExampleStateMapContextComponent {
-    statemap: HashMap<ActionState, ActionState>
+    statemap: CortexKvMap<ActionState, ActionState>
 }
 
 #[derive(Component, Default, Debug, Clone)]
@@ -156,7 +155,7 @@ fn example_context_fetcher(
 fn setup_example_context(
     mut commands: Commands,
 ) {
-    let mut statemap = HashMap::with_capacity(3);
+    let mut statemap = CortexKvMap::with_capacity(3);
     statemap.insert(ActionState::Ready, ActionState::Running);
     statemap.insert(ActionState::Running, ActionState::Failed);
     statemap.insert(ActionState::Failed, ActionState::Failed);
@@ -186,7 +185,7 @@ fn setup_example_entity(
         ActionTemplate::new(
             "ExampleAction",
             EXAMPLE_CONTEXT_FETCHER_NAME.to_string(), 
-            Vec::from([
+            crate::types::CortexList::from([
                 ConsiderationData::new(
                     "e2e::One",
                     "Linear",
@@ -209,14 +208,14 @@ fn setup_example_entity(
 
     let example_actionset = ActionSet {
         name: "ExampleActionSet".to_string(),
-        actions: Vec::from(example_actions)
+        actions: cortex::types::CortexList::from(example_actions)
     };
 
     actionset_store.map_by_name.insert(example_actionset.name.to_owned(), example_actionset);
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
-        actionset_refs: ThreadSafeRef::new(Vec::from(["ExampleActionSet".to_string()]))
+        actionset_refs: ThreadSafeRef::new(cortex::types::CortexList::from(["ExampleActionSet".to_string()]))
     };
 
     let spawned = commands.spawn((

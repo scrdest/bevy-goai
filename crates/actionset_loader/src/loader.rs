@@ -2,10 +2,10 @@ use core::marker::PhantomData;
 use core::time::Duration;
 
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 use cortex_core::actionset::{ActionSet};
+use cortex_core::types::CortexKvMap;
 
 
 pub trait ActionSetLoaderBackend: Send + Sync + 'static {
@@ -190,7 +190,7 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
         _ctx: &mut LoadContext<'_>
     ) -> Result<Self::Asset, Self::Error> {
         bevy::log::debug!("ActionSetLoader running...");
-        let mut bytes = Vec::new();
+        let mut bytes = cortex_core::types::CortexList::new();
         let _ = reader.read_to_end(&mut bytes).await;
         let read = Self::from_slice(&bytes);
         let res: Result<ActionSet, Box<dyn core::error::Error + Send + Sync + 'static>> = read.map_err(|err| { bevy::log::error!("ActionSetLoader error: {:?}", err); err.into() } );
@@ -204,11 +204,11 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
 }
 
 #[derive(Resource, Default)]
-struct ActionSetHandles(pub HashMap<String, Handle<ActionSet>>);
+struct ActionSetHandles(pub CortexKvMap<String, Handle<ActionSet>>);
 
 
 #[derive(Resource, Default)]
-struct AssetLoadTimeouts(pub HashMap<String, Timer>);
+struct AssetLoadTimeouts(pub CortexKvMap<String, Timer>);
 
 
 #[derive(Event, Debug)]

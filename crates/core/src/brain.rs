@@ -1,9 +1,9 @@
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
+use crate::types::CortexKvMap;
 
 #[derive(Component)]
-pub struct Relationships(HashMap<Entity, HashMap<String, f32>>);
+pub struct Relationships(CortexKvMap<Entity, CortexKvMap<String, f32>>);
 
 
 #[derive(Component)]
-pub struct Personality(HashMap<String, f32>);
+pub struct Personality(CortexKvMap<String, f32>);

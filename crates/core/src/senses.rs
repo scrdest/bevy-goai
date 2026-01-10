@@ -4,7 +4,7 @@ use crate::memories::{Memories};
 
 // An AI 
 #[derive(Component)]
-struct Senses(Vec<Box<dyn Sense>>);
+struct Senses(crate::types::CortexList<Box<dyn Sense>>);
 
 
 trait Sense: Send + Sync {

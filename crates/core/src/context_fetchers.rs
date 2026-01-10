@@ -2,8 +2,7 @@ extern crate alloc;
 use alloc::sync::Arc;
 use std::sync::{RwLock};
 use bevy::prelude::*;
-use bevy::platform::collections::HashMap;
-use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
+use crate::types::{self, ActionContext, AiEntity, CortexKvMap, PawnEntityRef};
 use crate::identifiers::ContextFetcherIdentifier;
 
 
@@ -33,7 +32,7 @@ pub type ContextFetcherInputs = bevy::prelude::In<(
 )>;
 
 /// Convenience type-alias for the output type required from a ContextFetcher System. 
-pub type ContextFetcherOutputs = Vec<ActionContext>;
+pub type ContextFetcherOutputs = crate::types::CortexList<ActionContext>;
 
 /// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
 /// that can be used as a Cortex ContextFetcher.
@@ -81,7 +80,7 @@ pub struct ContextFetcherMappedToSystem {
 
 #[derive(Resource, Default)]
 pub struct ContextFetcherKeyToSystemMap {
-    pub mapping: HashMap<
+    pub mapping: CortexKvMap<
         types::ContextFetcherKey, 
         Arc<RwLock<dyn ContextFetcherSystem>>
     >

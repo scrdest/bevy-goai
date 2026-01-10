@@ -2,6 +2,12 @@
 
 pub use crate::thread_safe_wrapper::ThreadSafeRef;
 
+/// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
+pub type CortexList<T> = Vec<T>;
+
+/// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
+pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+
 /// 
 pub type ContextFetcherKey = crate::identifiers::ContextFetcherIdentifier;
 pub type UtilityCurveKey = String;
@@ -21,7 +27,7 @@ pub type ActionTemplateRef = ThreadSafeRef<ActionTemplate>;
 
 pub type ActionContext = crate::actions::ActionContext;
 pub type ActionContextRef = ActionContext; // currently Entity, which is Copy and serves as a reference copied.
-pub type ActionContextList = Vec<ActionContextRef>;
+pub type ActionContextList = CortexList<ActionContextRef>;
 
 // Type aliases - to express intent better.
 pub type AiEntity = bevy::prelude::Entity;
@@ -41,7 +47,7 @@ pub use crate::considerations::IntoConsiderationSystem;
 pub type SmartObjects = crate::smart_object::SmartObjects;
 
 pub type ActionSetRef = String;
-pub type ActionSetsRef = ThreadSafeRef<Vec<ActionSetRef>>;
+pub type ActionSetsRef = ThreadSafeRef<CortexList<ActionSetRef>>;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
 

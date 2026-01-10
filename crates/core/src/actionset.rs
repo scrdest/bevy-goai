@@ -8,11 +8,11 @@ use serde::{Serialize, Deserialize};
 #[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
 pub struct ActionSet {
     pub name: String,
-    pub actions: Vec<ActionTemplate>,
+    pub actions: crate::types::CortexList<ActionTemplate>,
 }
 
 impl ActionSet {
-    pub fn new<IS: Into<String>>(name: IS, actions: Vec<ActionTemplate>) -> Self {
+    pub fn new<IS: Into<String>>(name: IS, actions: crate::types::CortexList<ActionTemplate>) -> Self {
         Self {
             name: name.into(),
             actions: actions,

@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::platform::collections::HashMap;
 use crate::actionset::ActionSet;
 use crate::types;
 
@@ -20,7 +19,7 @@ use crate::types;
 // 
 // 5) Therefore, we cannot store the ActionSets raw. Instead, we store a key of the ActionSet.
 // 
-// 6) ...but we still need to be able to recover 'em later as data - so we store them in a HashMap Resource.
+// 6) ...but we still need to be able to recover 'em later as data - so we store them in a CortexKvMap Resource.
 //
 // 7) Therefore the flow for processing Actions in the AI goes: 
 //    AI -> SmartObject component key -> Res<ActionSetStore> lookup -> ActionSet -> <Actions>
@@ -31,7 +30,7 @@ use crate::types;
 
 #[derive(Resource, Default, Reflect)]
 pub struct ActionSetStore {
-    pub map_by_name: HashMap<String, ActionSet>
+    pub map_by_name: types::CortexKvMap<String, ActionSet>
 }
 
 

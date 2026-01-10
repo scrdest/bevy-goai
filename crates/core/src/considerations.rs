@@ -3,9 +3,8 @@ use alloc::sync::Arc;
 use std::sync::{RwLock};
 
 use bevy::prelude::*;
-use bevy::platform::collections::HashMap;
 
-use crate::types::{self, ActionContextRef, AiEntity, PawnEntityRef};
+use crate::types::{self, ActionContextRef, AiEntity, CortexKvMap, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 
 #[cfg(any(feature = "actionset_loader"))]
@@ -127,7 +126,7 @@ pub struct ConsiderationMappedToSystem {
 
 #[derive(Resource, Default)]
 pub struct ConsiderationKeyToSystemMap {
-    pub mapping: HashMap<
+    pub mapping: CortexKvMap<
         ConsiderationIdentifier, 
         Arc<RwLock<dyn ConsiderationSystem>>
     >

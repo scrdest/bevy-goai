@@ -25,14 +25,13 @@
 //! 
 //! This is the core problem AI solves - given all ActionTemplates and all Contexts 
 //! available for them at a given moment, which combination to choose for execution?
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
 #[cfg(any(feature = "actionset_loader"))]
 use serde::{Serialize, Deserialize};
 
 use crate::considerations::ConsiderationData;
-use crate::types::{self, ActionContextRef};
+use crate::types::{self, ActionContextRef, CortexList, CortexKvMap};
 use crate::identifiers::{ContextFetcherIdentifier};
 
 pub type ActionContext = Entity;
@@ -80,7 +79,7 @@ pub struct ActionTemplate {
     /// 
     #[cfg_attr(any(feature = "actionset_loader"), serde(rename="context_fetcher"))]
     pub context_fetcher_name: ContextFetcherIdentifier,
-    pub considerations: Vec<ConsiderationData>,
+    pub considerations: CortexList<ConsiderationData>,
     pub priority: types::ActionScore,
     pub action_key: ActionKey,
     // AI LODs: 
@@ -96,7 +95,7 @@ impl ActionTemplate {
     >(
         name: INS,
         context_fetcher_name: CFN,
-        considerations: Vec<ConsiderationData>,
+        considerations: CortexList<ConsiderationData>,
         priority: types::ActionScore, 
         action_key: IAK, 
         lod_min: Option<types::AiLodLevelPrimitive>,
@@ -188,7 +187,7 @@ impl ActionPickCallback {
 
 #[derive(Default, Resource)]
 pub struct ActionHandlerKeyToSystemMap {
-    pub mapping: HashMap<
+    pub mapping: CortexKvMap<
         types::ActionKey, 
         ActionPickCallback,
     >
