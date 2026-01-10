@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::time::Duration;
 
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
@@ -7,11 +8,177 @@ use bevy::prelude::*;
 use cortex_core::actionset::{ActionSet};
 
 
+pub trait ActionSetLoaderBackend: Send + Sync + 'static {
+    /// What type does the loader return as a loader on error. 
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Must be able to load from a byte array.
+    fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error>;
+
+    /// What extensions should be read for this (by default)?
+    fn extensions() -> &'static [&'static str] {
+        &[]
+    }
+}
+
+#[cfg(any(feature = "json_support", test))]
+pub mod json_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct JsonActionSetLoader;
+
+    impl ActionSetLoaderBackend for JsonActionSetLoader {
+        type Error = serde_json::Error;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            serde_json::from_slice(&v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["json"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "toml_support"))]
+pub mod toml_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct TomlActionSetLoader;
+
+    impl ActionSetLoaderBackend for TomlActionSetLoader {
+        type Error = toml::de::Error;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            toml::from_slice(&v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["toml"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "msgpack_support"))]
+pub mod msgpack_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct MsgpackActionSetLoader;
+
+    impl ActionSetLoaderBackend for MsgpackActionSetLoader {
+        type Error = rmp_serde::decode::Error;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            rmp_serde::decode::from_slice(v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["msgpack"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "cbor_support"))]
+pub mod cbor_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct CborActionSetLoader;
+
+    impl ActionSetLoaderBackend for CborActionSetLoader {
+        type Error = ciborium::de::Error<std::io::Error>;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            ciborium::de::from_reader(v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &[".cbor"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "ron_support", test))]
+pub mod ron_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct RonActionSetLoader;
+
+    impl ActionSetLoaderBackend for RonActionSetLoader {
+        type Error = ron::de::SpannedError;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            ron::de::from_bytes(v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["ron"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "yaml_support", test))]
+pub mod yaml_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct YamlActionSetLoader;
+
+    impl ActionSetLoaderBackend for YamlActionSetLoader {
+        type Error = serde_saphyr::Error;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            serde_saphyr::from_slice(v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["yaml", "yml"]
+        }
+    }
+}
+
+
+#[cfg(any(feature = "postcard_support"))]
+pub mod postcard_support {
+    use super::{ActionSetLoaderBackend, ActionSet};
+
+    #[derive(Default)]
+    pub struct PostcardActionSetLoader;
+
+    impl ActionSetLoaderBackend for PostcardActionSetLoader {
+        type Error = postcard::Error;
+
+        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+            postcard::from_bytes(v)
+        }
+
+        fn extensions() -> &'static [&'static str] {
+            &["postcard"]
+        }
+    }
+}
+
+
 // Asset loader
 #[derive(Default)]
-pub struct ActionSetLoader;
+pub struct ActionSetLoader<B: ActionSetLoaderBackend>(PhantomData<B>);
 
-impl AssetLoader for ActionSetLoader {
+impl<B: ActionSetLoaderBackend> ActionSetLoader<B> {
+    fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, B::Error> {
+        B::from_slice(v)
+    }
+}
+
+impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
     type Asset = ActionSet;
     type Settings = ();
     type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
@@ -25,10 +192,14 @@ impl AssetLoader for ActionSetLoader {
         bevy::log::debug!("ActionSetLoader running...");
         let mut bytes = Vec::new();
         let _ = reader.read_to_end(&mut bytes).await;
-        let read= serde_json::from_slice(&bytes);
-        let res = read.map_err(|err| {bevy::log::error!("ActionSetLoader error: {:?}", err); err.into()} );
+        let read = Self::from_slice(&bytes);
+        let res: Result<ActionSet, Box<dyn std::error::Error + Send + Sync + 'static>> = read.map_err(|err| { bevy::log::error!("ActionSetLoader error: {:?}", err); err.into() } );
         bevy::log::debug!("ActionSetLoader finished...");
         res
+    }
+
+    fn extensions(&self) -> &[&str] {
+        B::extensions()
     }
 }
 
@@ -133,15 +304,16 @@ fn cleanup_timers_for_loaded_actionsets(
 
 
 #[derive(Default)]
-pub struct ActionSetAssetPlugin;
+pub struct ActionSetAssetPlugin<B: ActionSetLoaderBackend>(PhantomData<B>);
 
-impl bevy::app::Plugin for ActionSetAssetPlugin {
+
+impl<B: ActionSetLoaderBackend + Default> bevy::app::Plugin for ActionSetAssetPlugin<B> {
     fn build(&self, app: &mut bevy::app::App) {
         app
         .add_plugins(AssetPlugin::default())
         .init_resource::<ActionSetHandles>()
         .init_asset::<ActionSet>()
-        .init_asset_loader::<ActionSetLoader>()
+        .init_asset_loader::<ActionSetLoader<B>>()
         .init_resource::<AssetLoadTimeouts>()
         .add_observer(load_asset)
         .add_observer(cleanup_timers_for_loaded_actionsets)
@@ -153,14 +325,22 @@ impl bevy::app::Plugin for ActionSetAssetPlugin {
 #[cfg(test)]
 mod tests {
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
-use bevy::asset::{io::AssetSourceBuilder};
+    use bevy::asset::{io::AssetSourceBuilder};
+    use crate::ron_support::RonActionSetLoader;
+    use crate::yaml_support::YamlActionSetLoader;
+
     use super::*;
+    use super::json_support::JsonActionSetLoader;
+
+    #[derive(Resource, Debug)]
+    struct TestAssetFilepath(String);
 
     fn load_test_asset(
+        src_path_res: Res<TestAssetFilepath>,
         mut commands: Commands,
     ) {
         let request = LoadActionSetRequest {
-            filename: "test_assets://simpleagent.json".to_string()
+            filename: src_path_res.0.to_owned()
         };
         commands.trigger(request);
     }
@@ -184,8 +364,9 @@ use bevy::asset::{io::AssetSourceBuilder};
         exit.write(AppExit::Success);
     }
 
-    #[test]
-    fn test_load() {
+    /// An abstraction over the common bits of each format's test code. 
+    fn run_loader_test<B: ActionSetLoaderBackend + Default>(src_path: &str) {
+        let asloader: ActionSetAssetPlugin<B> = Default::default();
         let mut app = App::new();
         app
         .register_asset_source(
@@ -195,6 +376,7 @@ use bevy::asset::{io::AssetSourceBuilder};
                 None,
             )
         )
+        .insert_resource(TestAssetFilepath(src_path.to_string()))
         .add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_millis(200))),
             bevy::log::LogPlugin { 
@@ -203,12 +385,27 @@ use bevy::asset::{io::AssetSourceBuilder};
                 filter: "wgpu=error,bevy_render=info,bevy_ecs=info".to_string(),
                 fmt_layer: |_| None,
             },
-            ActionSetAssetPlugin::default(),
+            asloader,
             // DefaultPlugins
         ))
         .add_systems(Startup, load_test_asset)
         .add_observer(succeed_on_loaded)
         .add_observer(fail_on_timeout)
         .run();
+    }
+
+    #[test]
+    fn test_load_json() {
+        run_loader_test::<JsonActionSetLoader>("test_assets://simpleagent.json");
+    }
+
+    #[test]
+    fn test_load_ron() {
+        run_loader_test::<RonActionSetLoader>("test_assets://simpleagent.ron");
+    }
+
+    #[test]
+    fn test_load_yaml() {
+        run_loader_test::<YamlActionSetLoader>("test_assets://simpleagent.yaml");
     }
 }
