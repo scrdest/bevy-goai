@@ -122,12 +122,12 @@ impl ActionTemplate {
     }
 }
 
-impl std::hash::Hash for ActionTemplate {
+impl core::hash::Hash for ActionTemplate {
     /// ActionTemplates are equal if their Name and ActionKey are equal.
     /// Both are hashable, so we'll use them for hash keys as well.
     /// 
     /// Note that you may need to look up the canonical values of other fields from an Asset or w/e.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.action_key.hash(state);
     }

@@ -1,4 +1,6 @@
-use std::sync::{Arc, RwLock};
+extern crate alloc;
+use alloc::sync::Arc;
+use std::sync::{RwLock};
 
 use bevy::prelude::*;
 use bevy::platform::collections::HashMap;
@@ -127,7 +129,7 @@ pub struct ConsiderationMappedToSystem {
 pub struct ConsiderationKeyToSystemMap {
     pub mapping: HashMap<
         ConsiderationIdentifier, 
-        std::sync::Arc<std::sync::RwLock<dyn ConsiderationSystem>>
+        Arc<RwLock<dyn ConsiderationSystem>>
     >
 }
 
@@ -183,7 +185,7 @@ impl AcceptsConsiderationRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            std::sync::Arc::new(std::sync::RwLock::new(
+            Arc::new(RwLock::new(
                 system
             )));
         match old {

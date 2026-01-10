@@ -28,7 +28,7 @@ impl Into<bevy::prelude::Entity> for EntityIdentifier {
     }
 }
 
-impl std::ops::Deref for EntityIdentifier {
+impl core::ops::Deref for EntityIdentifier {
     type Target = bevy::prelude::Entity;
     
     fn deref(&self) -> &Self::Target {
@@ -39,8 +39,8 @@ impl std::ops::Deref for EntityIdentifier {
     }
 }
 
-impl std::fmt::Display for EntityIdentifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for EntityIdentifier {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Entity(e) => e.fmt(f),
             Self::EntityAndName(_, s) => s.fmt(f)
@@ -48,8 +48,8 @@ impl std::fmt::Display for EntityIdentifier {
     }
 }
 
-impl std::hash::Hash for EntityIdentifier {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for EntityIdentifier {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::Entity(e) => e.hash(state),
             Self::EntityAndName(e, _) => e.hash(state)

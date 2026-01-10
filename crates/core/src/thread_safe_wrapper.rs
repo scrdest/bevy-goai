@@ -7,7 +7,8 @@
 //! The backing library's datatype should be treated as a hidden implementation detail 
 //! for the overwhelming majority of possible purposes.
 
-use std::sync::Arc;
+extern crate alloc;
+use alloc::sync::Arc;
 
 /// The underlying 'backend' type for ThreadSafeRef
 type ThreadSafeRefValue<T> = Arc<T>;
@@ -21,7 +22,7 @@ type ThreadSafeRefValue<T> = Arc<T>;
 /// The backing library's datatype should be treated as a hidden implementation detail 
 /// for the overwhelming majority of possible purposes.
 /// 
-/// Note that this type does NOT provide weakrefs (e.g. [`std::sync::Weak`])! 
+/// Note that this type does NOT provide weakrefs (e.g. [`alloc::sync::Weak`])! 
 /// 
 /// Any abstracted weakrefs used by the library will be provided separately, if at all.
 #[derive(Debug, Hash, Default, bevy::reflect::Reflect)]
@@ -59,7 +60,7 @@ impl<T: ?Sized> From<Arc<T>> for ThreadSafeRef<T> {
 unsafe impl<T: ?Sized + Sync + Send> Send for ThreadSafeRef<T> {}
 unsafe impl<T: ?Sized + Sync + Send> Sync for ThreadSafeRef<T> {}
 
-impl<T: ?Sized> std::ops::Deref for ThreadSafeRef<T> {
+impl<T: ?Sized> core::ops::Deref for ThreadSafeRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -82,13 +83,13 @@ impl<T: PartialEq + ?Sized> PartialEq for ThreadSafeRef<T> {
 impl<T: Eq + ?Sized> Eq for ThreadSafeRef<T> {}
 
 impl<T: PartialOrd + ?Sized> PartialOrd for ThreadSafeRef<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         self.wrapped.partial_cmp(&other.wrapped)
     }
 }
 
 impl<T: Ord + ?Sized> Ord for ThreadSafeRef<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.wrapped.cmp(&other.wrapped)
     }
 }

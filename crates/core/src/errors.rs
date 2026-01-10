@@ -1,4 +1,5 @@
-use std::sync::Arc;
+extern crate alloc;
+use alloc::sync::Arc;
 
 use bevy::ecs::resource::Resource;
 
@@ -53,8 +54,8 @@ impl NoCurveMatchStrategy {
     }
 }
 
-impl std::fmt::Debug for NoCurveMatchStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for NoCurveMatchStrategy {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Panic => write!(f, "Panic"),
             Self::SkipConsiderationWithLog => write!(f, "SkipConsiderationWithLog"),

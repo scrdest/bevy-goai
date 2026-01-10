@@ -34,8 +34,10 @@
 //! 4) The methods of UtilityCurveExt - if you are planning to create custom Utility Curves, this  
 //!    trait provides constructors for various transforms that are still valid as Utility Curves.
 
-use std::sync::Arc;
+extern crate alloc;
+use alloc::sync::Arc;
 
+use bevy::platform::collections::HashMap;
 use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
 use crate::types::{ActionScore, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
 
@@ -861,11 +863,11 @@ pub enum SupportedUtilityCurve {
     /// Due to the Arc<dyn T> overhead, these will be less performant than 
     /// the corresponding built-in Curves above, even if they are implemented 
     /// in the exact same way.
-    Custom(std::sync::Arc<dyn UtilityCurve>)
+    Custom(Arc<dyn UtilityCurve>)
 }
 
-impl std::fmt::Debug for SupportedUtilityCurve {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for SupportedUtilityCurve {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::ConstZero(_) => f.debug_tuple("ConstZero").finish(),
             Self::ConstMax(_) => f.debug_tuple("ConstMax").finish(),
@@ -946,7 +948,7 @@ impl TryFrom<&String> for SupportedUtilityCurve {
 /// This will only work for curves included with the library! 
 /// 
 /// If you want to use 
-pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Option<SupportedUtilityCurve> {
+pub fn resolve_curve_from_name<S: core::borrow::Borrow<str>>(curve_name: S) -> Option<SupportedUtilityCurve> {
     match curve_name.borrow() {
         "ConstZero" => Some(SupportedUtilityCurve::ConstZero(CURVE_CONST_ZERO)),
         "ConstMax" => Some(SupportedUtilityCurve::ConstMax(CURVE_CONST_MAX)),
@@ -990,11 +992,11 @@ pub fn resolve_curve_from_name<S: std::borrow::Borrow<str>>(curve_name: S) -> Op
 /// A map that lets us request Utility Curves by a string key and register new entries for custom Curves. 
 #[derive(bevy::prelude::Resource, Clone, Default)]
 pub struct UtilityCurveRegistry {
-    mapping: std::collections::HashMap<String, SupportedUtilityCurve>
+    mapping: HashMap<String, SupportedUtilityCurve>
 }
 
 impl UtilityCurveRegistry {
-    pub fn get_curve_by_name<S: std::borrow::Borrow<str>>(&self, name: S) -> Option<SupportedUtilityCurve> {
+    pub fn get_curve_by_name<S: core::borrow::Borrow<str>>(&self, name: S) -> Option<SupportedUtilityCurve> {
         let static_resolve = resolve_curve_from_name(name.borrow());
 
         match static_resolve {
@@ -1053,7 +1055,7 @@ impl AcceptsCurveRegistrations for bevy::prelude::World {
         let old = registry.mapping.insert(
             curve_key.to_owned(), 
             SupportedUtilityCurve::Custom(
-                std::sync::Arc::new(curve)
+                Arc::new(curve)
             )
         );
 

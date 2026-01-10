@@ -10,7 +10,7 @@ impl Plugin for CortexTestPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((
-            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(std::time::Duration::from_millis(200))),
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(core::time::Duration::from_millis(200))),
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 

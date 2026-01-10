@@ -7,7 +7,7 @@
 //! Barring exceptional circumstances, all identifiers will be cheap and easy to 
 //! convert into at least a reference to their respective underlying types.
 
-use std::borrow::Borrow;
+use core::borrow::Borrow;
 
 use bevy::prelude::*;
 use bevy::reflect::{Reflect};
@@ -124,8 +124,8 @@ impl Borrow<str> for ConsiderationIdentifier {
     }
 }
 
-impl std::fmt::Display for ConsiderationIdentifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ConsiderationIdentifier {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.fmt(f)
     }
 }

@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
-use std::time::Duration;
+use core::marker::PhantomData;
+use core::time::Duration;
 
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::platform::collections::HashMap;
@@ -10,10 +10,10 @@ use cortex_core::actionset::{ActionSet};
 
 pub trait ActionSetLoaderBackend: Send + Sync + 'static {
     /// What type does the loader return as a loader on error. 
-    type Error: std::error::Error + Send + Sync + 'static;
+    type Error: core::error::Error + Send + Sync + 'static;
 
     /// Must be able to load from a byte array.
-    fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error>;
+    fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error>;
 
     /// What extensions should be read for this (by default)?
     fn extensions() -> &'static [&'static str] {
@@ -31,7 +31,7 @@ pub mod json_support {
     impl ActionSetLoaderBackend for JsonActionSetLoader {
         type Error = serde_json::Error;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             serde_json::from_slice(&v)
         }
 
@@ -52,7 +52,7 @@ pub mod toml_support {
     impl ActionSetLoaderBackend for TomlActionSetLoader {
         type Error = toml::de::Error;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             toml::from_slice(&v)
         }
 
@@ -73,7 +73,7 @@ pub mod msgpack_support {
     impl ActionSetLoaderBackend for MsgpackActionSetLoader {
         type Error = rmp_serde::decode::Error;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             rmp_serde::decode::from_slice(v)
         }
 
@@ -94,7 +94,7 @@ pub mod cbor_support {
     impl ActionSetLoaderBackend for CborActionSetLoader {
         type Error = ciborium::de::Error<std::io::Error>;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             ciborium::de::from_reader(v)
         }
 
@@ -115,7 +115,7 @@ pub mod ron_support {
     impl ActionSetLoaderBackend for RonActionSetLoader {
         type Error = ron::de::SpannedError;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             ron::de::from_bytes(v)
         }
 
@@ -136,7 +136,7 @@ pub mod yaml_support {
     impl ActionSetLoaderBackend for YamlActionSetLoader {
         type Error = serde_saphyr::Error;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             serde_saphyr::from_slice(v)
         }
 
@@ -157,7 +157,7 @@ pub mod postcard_support {
     impl ActionSetLoaderBackend for PostcardActionSetLoader {
         type Error = postcard::Error;
 
-        fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, Self::Error> {
+        fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, Self::Error> {
             postcard::from_bytes(v)
         }
 
@@ -173,7 +173,7 @@ pub mod postcard_support {
 pub struct ActionSetLoader<B: ActionSetLoaderBackend>(PhantomData<B>);
 
 impl<B: ActionSetLoaderBackend> ActionSetLoader<B> {
-    fn from_slice<'a>(v: &'a [u8]) -> std::result::Result<ActionSet, B::Error> {
+    fn from_slice<'a>(v: &'a [u8]) -> core::result::Result<ActionSet, B::Error> {
         B::from_slice(v)
     }
 }
@@ -181,7 +181,7 @@ impl<B: ActionSetLoaderBackend> ActionSetLoader<B> {
 impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
     type Asset = ActionSet;
     type Settings = ();
-    type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+    type Error = Box<dyn core::error::Error + Send + Sync + 'static>;
 
     async fn load(
         &self, 
@@ -193,7 +193,7 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
         let mut bytes = Vec::new();
         let _ = reader.read_to_end(&mut bytes).await;
         let read = Self::from_slice(&bytes);
-        let res: Result<ActionSet, Box<dyn std::error::Error + Send + Sync + 'static>> = read.map_err(|err| { bevy::log::error!("ActionSetLoader error: {:?}", err); err.into() } );
+        let res: Result<ActionSet, Box<dyn core::error::Error + Send + Sync + 'static>> = read.map_err(|err| { bevy::log::error!("ActionSetLoader error: {:?}", err); err.into() } );
         bevy::log::debug!("ActionSetLoader finished...");
         res
     }

@@ -1,4 +1,6 @@
-use std::sync::{Arc, RwLock};
+extern crate alloc;
+use alloc::sync::Arc;
+use std::sync::{RwLock};
 use bevy::prelude::*;
 use bevy::platform::collections::HashMap;
 use crate::types::{self, ActionContext, AiEntity, PawnEntityRef};
@@ -81,7 +83,7 @@ pub struct ContextFetcherMappedToSystem {
 pub struct ContextFetcherKeyToSystemMap {
     pub mapping: HashMap<
         types::ContextFetcherKey, 
-        std::sync::Arc<std::sync::RwLock<dyn ContextFetcherSystem>>
+        Arc<RwLock<dyn ContextFetcherSystem>>
     >
 }
 
@@ -137,7 +139,7 @@ impl AcceptsContextFetcherRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();            
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            std::sync::Arc::new(std::sync::RwLock::new(
+            Arc::new(RwLock::new(
                 system
             )));
         match old {

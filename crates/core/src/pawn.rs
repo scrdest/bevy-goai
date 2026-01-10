@@ -35,7 +35,7 @@ impl Pawn {
     }
 }
 
-impl std::borrow::Borrow<PawnEntityRef> for Pawn {
+impl core::borrow::Borrow<PawnEntityRef> for Pawn {
     fn borrow(&self) -> &PawnEntityRef {
         &self.0
     }

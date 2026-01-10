@@ -70,9 +70,9 @@ impl ActionTrackerState {
 /// Helper; wraps how we store time for tracking Action runtime timining.
 #[derive(Debug)]
 pub enum TimeInstantActionTracker {
-    Virtual(std::time::Duration),
-    Real(std::time::Duration),
-    VirtualAndReal((std::time::Duration, std::time::Duration)),
+    Virtual(core::time::Duration),
+    Real(core::time::Duration),
+    VirtualAndReal((core::time::Duration, core::time::Duration)),
 }
 
 /// An 'extension' Component for ActionTracker Bundles.
