@@ -110,7 +110,7 @@ fn example_consideration(
 
 /// This is an example event that lives in *your game code* (not in Cortex) and handles movement triggers.
 #[derive(EntityEvent)]
-struct MoveTo(Entity, Entity)
+struct MoveTo(Entity, Entity);
 
 /// This is a (very crude) movement Action implementation that lives in *your game code* (no offense!), 
 /// not in Cortex - Cortex likely does not even know it exists at all.
