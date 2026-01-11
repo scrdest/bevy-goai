@@ -10,11 +10,11 @@ members = [
 ]
 
 [dependencies]
-cortex-core = {path = "crates/core"}
-cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = true}
-cortex-actionset-loader = {path = "crates/actionset_loader", optional = true}
-cortex-test-plugin = {path = "crates/test_plugin", optional = true}
-cortex-api = {path = "crates/cortex_api", optional = true}
+cortex-core = {version = "0.1.0", path = "crates/core"}
+cortex-bevy-plugin = {version = "0.1.0", path = "crates/bevy_plugin", optional = true}
+cortex-actionset-loader = {version = "0.1.0", path = "crates/actionset_loader", optional = true}
+cortex-test-plugin = {version = "0.1.0", path = "crates/test_plugin", optional = true}
+cortex-api = {version = "0.1.0", path = "crates/cortex_api", optional = true}
 
 [dev-dependencies]
 bevy = { version = "0.17.3", default-features = false, features = ["debug"]}

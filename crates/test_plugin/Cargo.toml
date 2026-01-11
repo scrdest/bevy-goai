@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 bevy = { version = "0.17.3", default-features = false }
-cortex-core = {path = "../core"}
+cortex-core = {version = "0.1.0", path = "../core"}
 
 [dev-dependencies]
 bevy = { version = "0.17.3", default-features = false, features = ["dynamic_linking"] }
