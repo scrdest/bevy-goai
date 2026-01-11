@@ -6,7 +6,6 @@ edition = "2024"
 license = "MPL-2.0"
 keywords = ["ai", "gamedev", "utility-ai", "bevy"]
 categories = ["game-development", "no-std"]
-readme = "README.md"
 repository = "https://github.com/scrdest/Cranium"
 
 [dependencies]
