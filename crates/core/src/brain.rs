@@ -1,9 +1,9 @@
 use bevy::prelude::*;
-use crate::types::CortexKvMap;
+use crate::types::CraniumKvMap;
 
 #[derive(Component)]
-pub struct Relationships(CortexKvMap<Entity, CortexKvMap<String, f32>>);
+pub struct Relationships(CraniumKvMap<Entity, CraniumKvMap<String, f32>>);
 
 
 #[derive(Component)]
-pub struct Personality(CortexKvMap<String, f32>);
+pub struct Personality(CraniumKvMap<String, f32>);

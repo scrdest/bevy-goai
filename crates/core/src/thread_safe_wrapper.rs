@@ -1,7 +1,7 @@
 //! An abstraction over whatever thread-safe shared pointer type (i.e. Arc<T>-like) 
 //! the library has decided to use. 
 //! 
-//! This is used by Cortex for any possibly-parallel scenario where we need 
+//! This is used by Cranium for any possibly-parallel scenario where we need 
 //! cheap clone()s or dynamic dispatch, e.g. for registering user `Systems`.
 //! 
 //! The backing library's datatype should be treated as a hidden implementation detail 
@@ -14,7 +14,7 @@ type ThreadSafeRefValue<T> = Arc<T>;
 /// An abstraction over whatever thread-safe shared pointer type (i.e. [`Arc<T>`]-like) 
 /// the library has decided to use.
 /// 
-/// This is used by Cortex for any possibly-parallel scenario where we need 
+/// This is used by Cranium for any possibly-parallel scenario where we need 
 /// cheap clone()s or dynamic dispatch, e.g. for registering user `Systems`.
 /// 
 /// The backing library's datatype should be treated as a hidden implementation detail 

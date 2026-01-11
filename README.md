@@ -1,15 +1,15 @@
-# Cortex
+# Cranium
 
 **Mission Statement:** 
 
 > See more vibrant, interesting, living and breathing virtual worlds in games  
 > by making it as easy as possible for developers to create and run them efficiently.
 
-`Cortex` is an opinionated, modular, no_std-friendly (if you have access to alloc), 
+`Cranium` is an opinionated, modular, no_std-friendly (if you have access to alloc), 
 data-driven (and data-oriented) Rust library for 'classical' AI (primarily but not 
 exclusively Utility AI) for interactive applications such as games and simulations.
 
-`Cortex` is built using the [Bevy Game Engine](https://bevyengine.org/). 
+`Cranium` is built using the [Bevy Game Engine](https://bevyengine.org/). 
 
 However, a key design goal of the library is to be usable **outside** of Bevy - and even for
 non-Rust applications (*"AI Server style"*), while integrating cleanly *with* Bevy
@@ -37,9 +37,9 @@ for NPCs in a project written in a deeply locked-down, decades-old game engine.
 For an explanation of the concepts used in the code below, see the [Glossary](GLOSSARY.md)
 
 ```rust
-// Include the building blocks from Bevy and Cortex.
+// Include the building blocks from Bevy and Cranium.
 use bevy::prelude::*;
-use cortex_ai::prelude::*;
+use cranium::prelude::*;
 
 /// A simple 2d Position component for demo purposes only.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -108,12 +108,12 @@ fn example_consideration(
     val.into()
 }
 
-/// This is an example event that lives in *your game code* (not in Cortex) and handles movement triggers.
+/// This is an example event that lives in *your game code* (not in Cranium) and handles movement triggers.
 #[derive(EntityEvent)]
 struct MoveTo(Entity, Entity);
 
 /// This is a (very crude) movement Action implementation that lives in *your game code* (no offense!), 
-/// not in Cortex - Cortex likely does not even know it exists at all.
+/// not in Cranium - Cranium likely does not even know it exists at all.
 /// For each MoveTo event, moves some Entity (MoveTo.0) one step towards the target Entity (MoveTo.1).
 /// To keep things simple, we are assuming both Entities actually exist and have `Position2d`s.
 fn user_movement_observer(event: On<MoveTo>, pos_qry: Query<&Position2d>) {
@@ -126,7 +126,7 @@ fn user_movement_observer(event: On<MoveTo>, pos_qry: Query<&Position2d>) {
     pawn_pos.move_towards(target_pos, 1.);
 }
 
-/// ActionHandlers bridge the gap between Cortex and your own game logic by using Commands 
+/// ActionHandlers bridge the gap between Cranium and your own game logic by using Commands 
 /// to raise Events, write Messages, spawn Entities, or whatever else your game responds to. 
 fn example_action_handler(inputs: ActionHandlerInputs, mut commands: Commands) {
     // ActionHandlers always receive the same, standard parameters - they are functions, not Systems!
@@ -141,7 +141,7 @@ fn main() {
     let mut app = App::new();
 
     app
-        .add_plugins(CortexPlugin)
+        .add_plugins(CraniumPlugin)
         // Registering a ContextFetcher is as simple as passing it in with a key. 
         // 
         // 'Namespacing' keys (here with `mycode::`) is not necessary, but it is 
@@ -163,7 +163,7 @@ fn main() {
 
 ## Architecture
 
-The core `Cortex` engine largely follows the excellent `Infinite Axis Utility System` architecture as 
+The core `Cranium` engine largely follows the excellent `Infinite Axis Utility System` architecture as 
 outlined in the classic GDC 2015 talk ["Building a Better Centaur: AI at Massive Scale"](https://gdcvault.com/play/1021848/Building-a-Better-Centaur-AI) by Mike Lewis and Dave Mark.
 
 The basic idea is very simple: 
@@ -186,7 +186,7 @@ While reading the README of a Rust AI library suggests you're probably happy mes
 code, a good number of AI designers, modders, and tooling developers would also be happier if
 they didn't have to make code changes, and could instead tweak something in JSON or whatever.
 
-`Cortex` is built around treating AI definitions as Assets to be loaded from files 
+`Cranium` is built around treating AI definitions as Assets to be loaded from files 
 and mapped to an implementation at runtime using nice, human-readable string keys.
 
 You CAN hardcode things instead of using data assets if you are concerned about exposing things 
@@ -208,7 +208,7 @@ for scenarios where the simple approach wouldn't cut it.
 
 #### AI-as-an-Engine
 
-`Cortex` could not possibly provide support for every genre and use-case out of the box.
+`Cranium` could not possibly provide support for every genre and use-case out of the box.
 
 Even with open-source contributions, waiting for a release to support the use-cases 
 that you need to build your applications would not be a good experience for library users.
@@ -216,14 +216,14 @@ that you need to build your applications would not be a good experience for libr
 However, the core concepts of the library are open for third-party code to extend by
 registering implementations of Actions, Curves, Considerations, ContextFetchers, and more!
 
-This covers both the game-specific logic you bring to the table when building with `Cortex`, 
+This covers both the game-specific logic you bring to the table when building with `Cranium`, 
 but also leaves the door open for sub-libraries that provide useful AI tools and templates 
 for a specific genre.
 
 
 ## Getting started
 
-The two main patterns of using `Cortex` are: 
+The two main patterns of using `Cranium` are: 
 - **Native** - as a native part of your Bevy Engine applications.
 - **AI Server** - as a separate "AI World" for non-Bevy and/or non-Rust applications.
 
@@ -231,14 +231,14 @@ The two approaches are more similar than they might appear.
 
 In both cases, we're running the same core runtime in an ECS World. 
 
-The only difference is whether `Cortex` has direct access to your application data, and 
+The only difference is whether `Cranium` has direct access to your application data, and 
 whether the AI loop is part of your application loop or 'manually driven' by your apps.
 
-For the **Native** integration, `Cortex` provides a configurable Bevy Plugin which handles 
+For the **Native** integration, `Cranium` provides a configurable Bevy Plugin which handles 
 the majority of the basic setup for you - all you need to do is import it, add it to your 
 app, and register any custom types for the library to use on your behalf in AI code.
 
-For the **AI Server** integration, `Cortex` provides an API that lets you set up and drive 
+For the **AI Server** integration, `Cranium` provides an API that lets you set up and drive 
 a Bevy ECS World for the AI to operate in, and methods to update this world with data from 
 your own application.
 
@@ -254,7 +254,7 @@ In either case, you will nearly always need to tailor four things to your needs:
 
 `ContextFetchers` are Bevy Systems - for non-Bevy users, this means they are mostly straightforward 
 Rust functions, except for being able to make Queries (fast lookups of Entities and their Components 
-in the ECS World `Cortex` is running in).
+in the ECS World `Cranium` is running in).
 
 `ContextFetchers` receive some pre-defined inputs (normal function parameters whose types are 
 wrapped in Bevy's `In<T>` wrappers) to provide the necessary metadata to power your Queries.
@@ -301,32 +301,32 @@ wrong with the function you have built.
 #### Actions & ActionHandlers
 
 Deciding what's the best `Action` is well and good, but pretty pointless on its own. 
-Cortex needs to have a way of telling the application it's working for what to *do*.
+Cranium needs to have a way of telling the application it's working for what to *do*.
 
-Cortex cannot - and should not - mandate an implementation style for *your* code. 
+Cranium cannot - and should not - mandate an implementation style for *your* code. 
 Instead, we use a translation layer of `ActionHandlers`.
 
 An `ActionHandler` is a function - ANY function - that takes a set of standard inputs 
-as defined by Cortex (basic helpful details - AI, Pawn & Context), plus `mut Commands`.
+as defined by Cranium (basic helpful details - AI, Pawn & Context), plus `mut Commands`.
 
-`ActionHandlers` will be triggered by Cortex at appropriate times and are expected to 
+`ActionHandlers` will be triggered by Cranium at appropriate times and are expected to 
 use the Commands to raise Events, write Messages, spawn Entities, or whatever else it 
 is that you've wired your own game logic to respond to to trigger Stuff Happening.
 
-`ActionHandlers` are registered into Cortex (much like Considerations/CFs/etc.) using an associated Key. 
+`ActionHandlers` are registered into Cranium (much like Considerations/CFs/etc.) using an associated Key. 
 This should correspond to the `ActionKey` field of *at least one* `ActionTemplate`. 
 
-If that `ActionTemplate` gets picked, Cortex will trigger the corresponding ActionHandler, which 
+If that `ActionTemplate` gets picked, Cranium will trigger the corresponding ActionHandler, which 
 should then trigger whichever game-logic implementation you have for that ActionTemplate.
 
 For example, if an `ActionTemplate` with an `ActionKey` of `"mycode::Move"` gets picked, 
-Cortex will look for an ActionHandler registered with `"mycode::Move"` as the Key. 
+Cranium will look for an ActionHandler registered with `"mycode::Move"` as the Key. 
 
 Suppose it finds a `move_action_handler(...)` - which builds and triggers a custom Event defined in 
 your own game code, `MovementRequest(Entity, Entity)` that you have wired up to your own Observers, 
 who will set up some NPC to start moving towards a target location. Job done! 
 
-Cortex does not really care about all that - once the `ActionHandler` has been triggered, 
+Cranium does not really care about all that - once the `ActionHandler` has been triggered, 
 the library's job is done until the time comes to select another Action for execution. 
 Your game code is entirely within your power, as long as you use normal Bevy machinery to run it.
 

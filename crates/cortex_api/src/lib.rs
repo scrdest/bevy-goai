@@ -1,4 +1,4 @@
-//! This crate provides tooling to run Cortex as an "AI Server" for non-Bevy applications 
+//! This crate provides tooling to run Cranium as an "AI Server" for non-Bevy applications 
 //! (or Bevy applications who want to keep their Worlds separate from the AI World).
 //! 
 //! This includes functions to create an ECS World, drive it tick-by-tick externally, 

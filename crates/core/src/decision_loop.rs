@@ -146,7 +146,7 @@ pub fn disable_consideration_reinit(
 /// by the user or by third-party plugins! 
 /// 
 /// We refer to them by String keys in SmartObject definitions and resolve them at runtime 
-/// using a couple of custom Resources provided by Cortex; see `app.register_consideration()`, 
+/// using a couple of custom Resources provided by Cranium; see `app.register_consideration()`, 
 /// `app.register_context_fetcher()` and `app.register_utility_curve()` for API details.
 pub fn decision_engine(
     event: On<AiDecisionInitiated>,

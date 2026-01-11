@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use cortex_ai_core::*;
+use cranium_core::*;
 
 
 /// Helper for triggering AppExit. 

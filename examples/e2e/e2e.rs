@@ -1,18 +1,18 @@
 use bevy::{platform, prelude::*};
 
 // These two imports should keep you covered for day-to-day usage.
-// The CortexPlugin is in the Prelude with the right features enabled, but it doesn't work here fsr. 
-use cortex_ai::prelude::*;
-use cortex_ai_bevy_plugin::CortexPlugin;
+// The CraniumPlugin is in the Prelude with the right features enabled, but it doesn't work here fsr. 
+use cranium::prelude::*;
+use cranium_bevy_plugin::CraniumPlugin;
 
 // These imports are needed for setting up stuff behind the scenes. 
 // In a normal setup, you usually shouldn't need to import these.
-use cortex_ai::action_runtime::{ActionTrackerState};
-use cortex_ai::actionset::ActionSet;
-use cortex_ai::considerations::{ConsiderationData};
-use cortex_ai::curves::{LinearCurve, UtilityCurveExt};
-use cortex_ai::smart_object::{ActionSetStore};
-use cortex_ai_test_plugin::CortexTestPlugin;
+use cranium::action_runtime::{ActionTrackerState};
+use cranium::actionset::ActionSet;
+use cranium::considerations::{ConsiderationData};
+use cranium::curves::{LinearCurve, UtilityCurveExt};
+use cranium::smart_object::{ActionSetStore};
+use cranium_test_plugin::CraniumTestPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
@@ -137,7 +137,7 @@ impl Position2d {
 /// Action which will use the mapping to figure out its next State by lookup.
 #[derive(Component, Default, Debug, Clone)]
 struct ExampleStateMapContextComponent {
-    statemap: CortexKvMap<ActionState, ActionState>
+    statemap: CraniumKvMap<ActionState, ActionState>
 }
 
 #[derive(Component, Default, Debug, Clone)]
@@ -155,7 +155,7 @@ fn example_context_fetcher(
 fn setup_example_context(
     mut commands: Commands,
 ) {
-    let mut statemap = CortexKvMap::with_capacity(3);
+    let mut statemap = CraniumKvMap::with_capacity(3);
     statemap.insert(ActionState::Ready, ActionState::Running);
     statemap.insert(ActionState::Running, ActionState::Failed);
     statemap.insert(ActionState::Failed, ActionState::Failed);
@@ -185,7 +185,7 @@ fn setup_example_entity(
         ActionTemplate::new(
             "ExampleAction",
             EXAMPLE_CONTEXT_FETCHER_NAME.to_string(), 
-            crate::types::CortexList::from([
+            crate::types::CraniumList::from([
                 ConsiderationData::new(
                     "e2e::One",
                     "Linear",
@@ -208,14 +208,14 @@ fn setup_example_entity(
 
     let example_actionset = ActionSet {
         name: "ExampleActionSet".to_string(),
-        actions: cortex_ai::types::CortexList::from(example_actions)
+        actions: cranium::types::CraniumList::from(example_actions)
     };
 
     actionset_store.map_by_name.insert(example_actionset.name.to_owned(), example_actionset);
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
-        actionset_refs: ThreadSafeRef::new(cortex_ai::types::CortexList::from(["ExampleActionSet".to_string()]))
+        actionset_refs: ThreadSafeRef::new(cranium::types::CraniumList::from(["ExampleActionSet".to_string()]))
     };
 
     let spawned = commands.spawn((
@@ -351,11 +351,11 @@ fn main() {
     let leaky_curve = LinearCurve.hard_leak(0.5);
 
     app
-    // Enables the main Cortex integration:
-    .add_plugins(CortexPlugin)
+    // Enables the main Cranium integration:
+    .add_plugins(CraniumPlugin)
     
     // Configures the app to shut down once all Actions are finished at the end of a tick, plus logs and such:
-    .add_plugins(CortexTestPlugin)
+    .add_plugins(CraniumTestPlugin)
     
     // We'll use 'ticking' Actions (a'la Update() method on non-ECS GameObjects) for this demo.
     .add_plugins(TickBasedActionTrackerPlugin)
@@ -385,7 +385,7 @@ fn main() {
 
     app.run();
 
-    bevy::log::info!("All actions finished - Bevy app exited successfully. Exiting Cortex shortly...");
+    bevy::log::info!("All actions finished - Bevy app exited successfully. Exiting Cranium shortly...");
     // Delay the exit to let people using one-off terminal windows see what's going on.
     let mut counter = 0u32;
     while counter < 100 {

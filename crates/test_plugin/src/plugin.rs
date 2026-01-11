@@ -5,9 +5,9 @@ use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use crate::helpers::*;
 
 
-pub struct CortexTestPlugin; 
+pub struct CraniumTestPlugin; 
 
-impl Plugin for CortexTestPlugin {
+impl Plugin for CraniumTestPlugin {
     fn build(&self, app: &mut App) {
         app
         .add_plugins((

@@ -36,7 +36,7 @@
 use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
 use bevy::platform::prelude::{String, ToOwned};
 use bevy::platform::sync::Arc;
-use crate::types::{ActionScore, CortexKvMap, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
+use crate::types::{ActionScore, CraniumKvMap, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
 
 // Reexporting some common basic Bevy Curves for easy access when building custom user Curves.
 pub use bevy::math::curve::{LinearCurve, QuadraticInCurve, QuadraticInOutCurve, ExponentialInCurve, CubicInCurve};
@@ -989,7 +989,7 @@ pub fn resolve_curve_from_name<S: core::borrow::Borrow<str>>(curve_name: S) -> O
 /// A map that lets us request Utility Curves by a string key and register new entries for custom Curves. 
 #[derive(bevy::prelude::Resource, Clone, Default)]
 pub struct UtilityCurveRegistry {
-    mapping: CortexKvMap<String, SupportedUtilityCurve>
+    mapping: CraniumKvMap<String, SupportedUtilityCurve>
 }
 
 impl UtilityCurveRegistry {

@@ -1,5 +1,5 @@
 [package]
-name = "cortex-ai-core"
+name = "cranium-core"
 version = "0.1.0"
 edition = "2024"
 

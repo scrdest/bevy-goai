@@ -1,17 +1,17 @@
 use bevy::prelude::*;
-use cortex_ai_core::actions;
-use cortex_ai_core::action_runtime;
-use cortex_ai_core::considerations;
-use cortex_ai_core::context_fetchers;
-use cortex_ai_core::decision_loop;
-use cortex_ai_core::smart_object;
+use cranium_core::actions;
+use cranium_core::action_runtime;
+use cranium_core::considerations;
+use cranium_core::context_fetchers;
+use cranium_core::decision_loop;
+use cranium_core::smart_object;
 
 #[cfg(feature = "include_actionset_loader")]
 use cortex_actionset_loader::ActionSetAssetPlugin;
 
-pub struct CortexPlugin; 
+pub struct CraniumPlugin; 
 
-impl Plugin for CortexPlugin {
+impl Plugin for CraniumPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "include_actionset_loader")]
         app
@@ -27,7 +27,7 @@ impl Plugin for CortexPlugin {
         ))
         .init_resource::<action_runtime::UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<smart_object::ActionSetStore>()
-        .add_message::<cortex_ai_core::events::AiActionDispatchToUserCode>()
+        .add_message::<cranium_core::events::AiActionDispatchToUserCode>()
         .add_observer(action_runtime::create_tracker_for_picked_action)
         .add_observer(action_runtime::actiontracker_triggered_spawner)
         .add_observer(action_runtime::actiontracker_triggered_despawner)

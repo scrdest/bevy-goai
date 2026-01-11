@@ -1,7 +1,7 @@
 use core::{num::NonZero, time::Duration};
 
 use bevy::{prelude::*};
-use cortex_ai_bevy_plugin::CortexPlugin;
+use cranium_bevy_plugin::CraniumPlugin;
 
 #[derive(Resource)]
 struct AutoRunHeartbeatTimeout(core::time::Duration);
@@ -32,7 +32,7 @@ struct AutoRunHeartbeatTracker {
 #[derive(Event)]
 struct AutoRunHeartbeat;
 
-/// Triggers AutoRunHeartbeat events, keeping the AutoRun-ing Cortex instance alive.
+/// Triggers AutoRunHeartbeat events, keeping the AutoRun-ing Cranium instance alive.
 /// This function is expected to be called periodically by the user from downstream code 
 /// as an alternative to driving the whole App themselves.
 pub fn _heartbeat(
@@ -87,7 +87,7 @@ fn check_heartbeat_system(
 
     if delta > timeout {
         bevy::log::error!(
-            "Cortex received no heartbeat in more than {:?}s (delta:{:?}s, last update time: {:?}s), quitting!", 
+            "Cranium received no heartbeat in more than {:?}s (delta:{:?}s, last update time: {:?}s), quitting!", 
             timeout.as_secs(), delta.as_secs(), last_tick.as_secs()
         );
         app_exit.write(AppExit::Error(NonZero::new(1u8).unwrap()));
@@ -96,7 +96,7 @@ fn check_heartbeat_system(
 
 pub fn create_app() -> App {
     let mut app = App::new();
-    app.add_plugins(CortexPlugin);
+    app.add_plugins(CraniumPlugin);
 
     #[cfg(feature = "logging")]
     app.add_plugins(
@@ -162,6 +162,6 @@ pub fn autorun(mut app: App) {
 pub fn create_and_autorun() {
     let app = configure_for_autorun(create_app());
     #[cfg(feature = "logging")]
-    bevy::log::info!("Created a Cortex Server app, running...");
+    bevy::log::info!("Created a Cranium Server app, running...");
     autorun(app);
 }

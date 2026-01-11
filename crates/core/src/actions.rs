@@ -31,7 +31,7 @@ use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
 
 use crate::considerations::ConsiderationData;
-use crate::types::{self, ActionContextRef, CortexList, CortexKvMap};
+use crate::types::{self, ActionContextRef, CraniumList, CraniumKvMap};
 use crate::identifiers::{ContextFetcherIdentifier};
 
 pub type ActionContext = Entity;
@@ -79,7 +79,7 @@ pub struct ActionTemplate {
     /// 
     #[cfg_attr(any(feature = "actionset_loader"), serde(rename="context_fetcher"))]
     pub context_fetcher_name: ContextFetcherIdentifier,
-    pub considerations: CortexList<ConsiderationData>,
+    pub considerations: CraniumList<ConsiderationData>,
     pub priority: types::ActionScore,
     pub action_key: ActionKey,
     // AI LODs: 
@@ -95,7 +95,7 @@ impl ActionTemplate {
     >(
         name: INS,
         context_fetcher_name: CFN,
-        considerations: CortexList<ConsiderationData>,
+        considerations: CraniumList<ConsiderationData>,
         priority: types::ActionScore, 
         action_key: IAK, 
         lod_min: Option<types::AiLodLevelPrimitive>,
@@ -157,7 +157,7 @@ pub type ActionHandlerFn = dyn Send + Sync + FnMut(ActionHandlerInputs, Commands
 
 /// A 'guardrail' trait for Events that trigger your Action logic. 
 /// 
-/// This trait is not used as an actual bound in any Cortex code; 
+/// This trait is not used as an actual bound in any Cranium code; 
 /// the point of it is to give you an interface which, once implemented, 
 /// will ensure you've got the basics covered for working with Actions 
 /// and a solid base for building simple ActionHandler functions quickly.
@@ -193,7 +193,7 @@ impl<F: 'static + Send + Sync + FnMut(ActionHandlerInputs, Commands)> From<F> fo
 
 #[derive(Default, Resource)]
 pub struct ActionHandlerKeyToSystemMap {
-    pub mapping: CortexKvMap<
+    pub mapping: CraniumKvMap<
         types::ActionKey, 
         ActionPickCallback,
     >

@@ -1513,68 +1513,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-ai"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "cortex-ai-actionset-loader",
- "cortex-ai-api",
- "cortex-ai-bevy-plugin",
- "cortex-ai-core",
- "cortex-ai-test-plugin",
-]
-
-[[package]]
-name = "cortex-ai-actionset-loader"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "ciborium",
- "cortex-ai-core",
- "postcard",
- "rmp-serde",
- "ron 0.12.0",
- "serde",
- "serde-saphyr",
- "serde_json",
- "toml",
-]
-
-[[package]]
-name = "cortex-ai-api"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "cortex-ai-bevy-plugin",
- "cortex-ai-core",
-]
-
-[[package]]
-name = "cortex-ai-bevy-plugin"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "cortex-ai-actionset-loader",
- "cortex-ai-core",
-]
-
-[[package]]
-name = "cortex-ai-core"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "serde",
-]
-
-[[package]]
-name = "cortex-ai-test-plugin"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "cortex-ai-core",
-]
-
-[[package]]
 name = "cosmic-text"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1595,6 +1533,68 @@ dependencies = [
  "unicode-linebreak",
  "unicode-script",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "cranium"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cranium-actionset-loader",
+ "cranium-api",
+ "cranium-bevy-plugin",
+ "cranium-core",
+ "cranium-test-plugin",
+]
+
+[[package]]
+name = "cranium-actionset-loader"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "ciborium",
+ "cranium-core",
+ "postcard",
+ "rmp-serde",
+ "ron 0.12.0",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "cranium-api"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cranium-bevy-plugin",
+ "cranium-core",
+]
+
+[[package]]
+name = "cranium-bevy-plugin"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cranium-actionset-loader",
+ "cranium-core",
+]
+
+[[package]]
+name = "cranium-core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+]
+
+[[package]]
+name = "cranium-test-plugin"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cranium-core",
 ]
 
 [[package]]

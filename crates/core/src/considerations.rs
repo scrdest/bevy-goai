@@ -3,7 +3,7 @@ use bevy::platform::prelude::{String, ToOwned};
 use bevy::prelude::*;
 use bevy::platform::sync::Arc;
 
-use crate::types::{self, ActionContextRef, AiEntity, CortexKvMap, CortexRwLock, PawnEntityRef};
+use crate::types::{self, ActionContextRef, AiEntity, CraniumKvMap, CraniumRwLock, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 
 #[cfg(any(feature = "actionset_loader"))]
@@ -70,7 +70,7 @@ pub type ConsiderationOutputs = Option<f32>;
 
 
 /// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
-/// that can be used as a Cortex Consideration.
+/// that can be used as a Cranium Consideration.
 /// 
 /// Note that the associated `In` type only adds the restriction that your custom 
 /// functions must *at least* accept the metadata piped into them; you can add any 
@@ -89,7 +89,7 @@ impl<
 
 
 /// A specialization of Bevy's `IntoSystem` trait that defines any function 
-/// that can be turned into a valid Cortex Consideration System.
+/// that can be turned into a valid Cranium Consideration System.
 pub trait IntoConsiderationSystem<Marker>: IntoSystem<
     ConsiderationInputs, 
     ConsiderationOutputs, 
@@ -115,7 +115,7 @@ pub struct ConsiderationMappedToSystem {
     // NOTE: This is Result<T> as the registry lookup is fallible 
     //       and we will need to propagate these errors later on.
     // pub consideration_systemid: Result<types::ConsiderationSignature, ()>,
-    pub consideration_system: Result<Arc<CortexRwLock<dyn ConsiderationSystem>>, ()>,
+    pub consideration_system: Result<Arc<CraniumRwLock<dyn ConsiderationSystem>>, ()>,
     pub curve_name: CurveIdentifier,
 
     pub min: types::ActionScore,
@@ -125,9 +125,9 @@ pub struct ConsiderationMappedToSystem {
 
 #[derive(Resource, Default)]
 pub struct ConsiderationKeyToSystemMap {
-    pub mapping: CortexKvMap<
+    pub mapping: CraniumKvMap<
         ConsiderationIdentifier, 
-        Arc<CortexRwLock<dyn ConsiderationSystem>>
+        Arc<CraniumRwLock<dyn ConsiderationSystem>>
     >
 }
 
@@ -183,7 +183,7 @@ impl AcceptsConsiderationRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            Arc::new(CortexRwLock::new(
+            Arc::new(CraniumRwLock::new(
                 system
             )));
         match old {

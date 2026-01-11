@@ -4,8 +4,8 @@ use core::time::Duration;
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
 
-use cortex_ai_core::actionset::{ActionSet};
-use cortex_ai_core::types::CortexKvMap;
+use cranium_core::actionset::{ActionSet};
+use cranium_core::types::CraniumKvMap;
 
 
 pub trait ActionSetLoaderBackend: Send + Sync + 'static {
@@ -191,7 +191,7 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
     ) -> Result<Self::Asset, Self::Error> {
         #[cfg(feature = "logging")]
         bevy::log::debug!("ActionSetLoader running...");
-        let mut bytes = cortex_ai_core::types::CortexList::new();
+        let mut bytes = cranium_core::types::CraniumList::new();
         let _ = reader.read_to_end(&mut bytes).await;
         let read = Self::from_slice(&bytes);
         let res: Result<ActionSet, Box<dyn core::error::Error + Send + Sync + 'static>> = read.map_err(|err| { 
@@ -210,11 +210,11 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
 }
 
 #[derive(Resource, Default)]
-struct ActionSetHandles(pub CortexKvMap<String, Handle<ActionSet>>);
+struct ActionSetHandles(pub CraniumKvMap<String, Handle<ActionSet>>);
 
 
 #[derive(Resource, Default)]
-struct AssetLoadTimeouts(pub CortexKvMap<String, Timer>);
+struct AssetLoadTimeouts(pub CraniumKvMap<String, Timer>);
 
 
 #[derive(Event, Debug)]

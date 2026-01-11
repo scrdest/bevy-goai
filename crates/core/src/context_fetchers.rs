@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::platform::prelude::{String, ToOwned};
 use bevy::platform::sync::Arc;
-use crate::types::{self, ActionContext, AiEntity, CortexKvMap, CortexRwLock, PawnEntityRef};
+use crate::types::{self, ActionContext, AiEntity, CraniumKvMap, CraniumRwLock, PawnEntityRef};
 use crate::identifiers::ContextFetcherIdentifier;
 
 
@@ -31,10 +31,10 @@ pub type ContextFetcherInputs = bevy::prelude::In<(
 )>;
 
 /// Convenience type-alias for the output type required from a ContextFetcher System. 
-pub type ContextFetcherOutputs = crate::types::CortexList<ActionContext>;
+pub type ContextFetcherOutputs = crate::types::CraniumList<ActionContext>;
 
 /// A specialization of Bevy's `System` trait (or more precisely, `ReadOnlySystem`) 
-/// that can be used as a Cortex ContextFetcher.
+/// that can be used as a Cranium ContextFetcher.
 /// 
 /// Note that the associated `In` type only adds the restriction that your custom 
 /// functions must *at least* accept the metadata piped into them; you can add any 
@@ -53,7 +53,7 @@ impl<
 
 
 /// A specialization of Bevy's `IntoSystem` trait that defines any function 
-/// that can be turned into a valid Cortex ContextFetcher System.
+/// that can be turned into a valid Cranium ContextFetcher System.
 pub trait IntoContextFetcherSystem<Marker>: IntoSystem<
     ContextFetcherInputs, 
     ContextFetcherOutputs, 
@@ -74,14 +74,14 @@ impl<
 
 #[derive(Clone)]
 pub struct ContextFetcherMappedToSystem {
-    pub context_fetcher_system: Result<Arc<CortexRwLock<dyn ContextFetcherSystem>>, ()>,
+    pub context_fetcher_system: Result<Arc<CraniumRwLock<dyn ContextFetcherSystem>>, ()>,
 }
 
 #[derive(Resource, Default)]
 pub struct ContextFetcherKeyToSystemMap {
-    pub mapping: CortexKvMap<
+    pub mapping: CraniumKvMap<
         types::ContextFetcherKey, 
-        Arc<CortexRwLock<dyn ContextFetcherSystem>>
+        Arc<CraniumRwLock<dyn ContextFetcherSystem>>
     >
 }
 
@@ -137,7 +137,7 @@ impl AcceptsContextFetcherRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();            
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            Arc::new(CortexRwLock::new(
+            Arc::new(CraniumRwLock::new(
                 system
             )));
         match old {

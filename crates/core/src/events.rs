@@ -91,7 +91,7 @@ pub struct AiDecisionInitiated {
 }
 
 
-/// An Event that signals that Cortex is handing off to the user code by running 
+/// An Event that signals that Cranium is handing off to the user code by running 
 /// any registered ActionHandlers.
 /// 
 /// Primarily used as a trigger to kick off a System that handles calling an appropriate 

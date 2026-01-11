@@ -8,28 +8,28 @@ pub use crate::thread_safe_wrapper::ThreadSafeRef;
 mod std_types {
     extern crate std;
     
-    /// A standardized Cortex type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
-    pub type CortexRwLock<T> = bevy::platform::sync::RwLock<T>;
+    /// A standardized Cranium type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
+    pub type CraniumRwLock<T> = bevy::platform::sync::RwLock<T>;
 
-    /// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
-    pub type CortexList<T> = bevy::platform::prelude::Vec<T>;
+    /// A standardized Cranium type for dynamic arrays (i.e. Vec<T> or equivalents)
+    pub type CraniumList<T> = bevy::platform::prelude::Vec<T>;
 
-    /// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
-    pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+    /// A standardized Cranium type for key-value maps (generally hashmaps; HashMap or equivalent)
+    pub type CraniumKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
 }
 
 #[cfg(all(any(feature = "nostd_support")))]
 mod nostd_types {
     //! std-free implementations 
     
-    /// A standardized Cortex type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
-    pub type CortexRwLock<T> = bevy::platform::sync::RwLock<T>;
+    /// A standardized Cranium type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
+    pub type CraniumRwLock<T> = bevy::platform::sync::RwLock<T>;
 
-    /// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
-    pub type CortexList<T> = bevy::platform::prelude::Vec<T>;
+    /// A standardized Cranium type for dynamic arrays (i.e. Vec<T> or equivalents)
+    pub type CraniumList<T> = bevy::platform::prelude::Vec<T>;
 
-    /// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
-    pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+    /// A standardized Cranium type for key-value maps (generally hashmaps; HashMap or equivalent)
+    pub type CraniumKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
 }
 
 // If nostd_support is enabled, it takes precedence over std. 
@@ -60,7 +60,7 @@ pub type ActionTemplateRef = ThreadSafeRef<ActionTemplate>;
 
 pub type ActionContext = crate::actions::ActionContext;
 pub type ActionContextRef = ActionContext; // currently Entity, which is Copy and serves as a reference copied.
-pub type ActionContextList = CortexList<ActionContextRef>;
+pub type ActionContextList = CraniumList<ActionContextRef>;
 
 // Type aliases - to express intent better.
 pub type AiEntity = bevy::prelude::Entity;
@@ -80,7 +80,7 @@ pub use crate::considerations::IntoConsiderationSystem;
 pub type SmartObjects = crate::smart_object::SmartObjects;
 
 pub type ActionSetRef = String;
-pub type ActionSetsRef = ThreadSafeRef<CortexList<ActionSetRef>>;
+pub type ActionSetsRef = ThreadSafeRef<CraniumList<ActionSetRef>>;
 
 pub type EntityIdentifier = crate::entity_identifier::EntityIdentifier;
 

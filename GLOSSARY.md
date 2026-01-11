@@ -32,7 +32,7 @@ Stores the data needed by the decision engine to turn it into an `Action`.
 The 'target'/'object' of the Action. 
 e.g. `(somewhere)` in `Move(somewhere)` or `(something)` in `PickUp(something)`. 
 
-In Cortex, those are stored as Bevy Entities, i.e. lightweight identifiers that can be fed
+In Cranium, those are stored as Bevy Entities, i.e. lightweight identifiers that can be fed
 into Queries to retrieve any and all Components they might have, cheaply (`O(1)` time!).
 
 
@@ -77,7 +77,7 @@ Considerations are generally expected to be supplied by users to tailor the AI t
 As long as your function satisfies the `Consideration` interface (output type, handle piped inputs, 
 and read-only), you can do anything you want as part of the Consideration logic.
 
-Considerations can be exposed to Cortex using the `.register_consideration(func, key)` method on 
+Considerations can be exposed to Cranium using the `.register_consideration(func, key)` method on 
 Apps and Worlds.
 
 

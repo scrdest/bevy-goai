@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::types::CortexKvMap;
+use crate::types::CraniumKvMap;
 
 type MemoryEntry = serde_json::Value;
-type MemoryMap = CortexKvMap<String, (MemoryEntry, Timer)>;
+type MemoryMap = CraniumKvMap<String, (MemoryEntry, Timer)>;
 
 
 #[derive(Component, Serialize, Deserialize)]
