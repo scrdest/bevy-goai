@@ -40,6 +40,7 @@ For an explanation of the concepts used in the code below, see the [Glossary](GL
 // Include the building blocks from Bevy and Cranium.
 use bevy::prelude::*;
 use cranium::prelude::*;
+use cranium_bevy_plugin::CraniumPlugin;
 
 /// A simple 2d Position component for demo purposes only.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -60,7 +61,7 @@ fn example_context_fetcher(
     // Any CF must handle ContextFetcherInputs, even if they aren't used.
     _inp: ContextFetcherInputs, 
     // You can add any number of Queries, Resources, etc. here as long as they're read-only-compatible.
-    context_data_qry: Query<Entity, With<&DumbMarker>>,
+    context_data_qry: Query<Entity, With<DumbMarker>>,
 ) 
 // Any CF must output this type (it's some flavor of an array of Entity like Vec<Entity>, 
 // you generally should be able to let the library worry about it by using a `.collect()`).
@@ -109,19 +110,19 @@ fn example_consideration(
 }
 
 /// This is an example event that lives in *your game code* (not in Cranium) and handles movement triggers.
-#[derive(EntityEvent)]
+#[derive(Event)]
 struct MoveTo(Entity, Entity);
 
 /// This is a (very crude) movement Action implementation that lives in *your game code* (no offense!), 
 /// not in Cranium - Cranium likely does not even know it exists at all.
 /// For each MoveTo event, moves some Entity (MoveTo.0) one step towards the target Entity (MoveTo.1).
 /// To keep things simple, we are assuming both Entities actually exist and have `Position2d`s.
-fn user_movement_observer(event: On<MoveTo>, pos_qry: Query<&Position2d>) {
-    let pawn = &event.0;
-    let target = &event.1;
+fn user_movement_observer(event: On<MoveTo>, mut pos_qry: Query<&Position2d>) {
+    let pawn = event.0;
+    let target = event.1;
 
-    let mut pawn_pos = pos_qry.get_mut(pawn).unwrap();
-    let target_pos = pos_qry.get(target).unwrap();
+    let mut pawn_pos = pos_qry.get_mut(pawn).unwrap().0;
+    let target_pos = pos_qry.get(target).unwrap().0;
 
     pawn_pos.move_towards(target_pos, 1.);
 }
@@ -132,7 +133,7 @@ fn example_action_handler(inputs: ActionHandlerInputs, mut commands: Commands) {
     // ActionHandlers always receive the same, standard parameters - they are functions, not Systems!
     let (ai, pawn, ctx) = inputs;
     // We'll build a MoveTo event and trigger it, which will itself trigger a `user_movement_observer()`.
-    commands.trigger(MoveTo(pawn, ctx));
+    commands.trigger(MoveTo(pawn.unwrap(), ctx));
 }
 
 // Putting it all together. You can easily port this example to a Plugin impl instead to wrap
@@ -156,7 +157,7 @@ fn main() {
         .register_action_handler(example_action_handler, "mycode::move_to")
     ;
 
-    app.run()
+    app.run();
 }
 ```
 
