@@ -1,7 +1,13 @@
 [package]
 name = "cranium-api"
+description = "A crate extending the Cranium AI library with utilities for using Cranium outside of Bevy as an AI Server."
 version = "0.1.0"
 edition = "2024"
+license = "MPL-2.0"
+keywords = ["ai", "gamedev", "utility-ai", "bevy"]
+categories = ["game-development", "no-std"]
+readme = "README.md"
+repository = "https://github.com/scrdest/Cranium"
 
 [lib]
 crate-type = ["cdylib", "lib"]

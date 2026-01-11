@@ -1,7 +1,13 @@
 [package]
 name = "cranium"
+description = "A fast, modular, no_std-friendly, batteries-included library for Game AI written in Rust."
 version = "0.1.0"
 edition = "2024"
+license = "MPL-2.0"
+keywords = ["ai", "gamedev", "utility-ai", "bevy"]
+categories = ["game-development", "no-std"]
+readme = "README.md"
+repository = "https://github.com/scrdest/Cranium"
 
 [workspace]
 resolver = "2"

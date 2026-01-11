@@ -1,7 +1,13 @@
 [package]
 name = "cranium-actionset-loader"
+description = "A crate extending the Cranium AI library with asset-loaders from a variety of file formats."
 version = "0.1.0"
 edition = "2024"
+license = "MPL-2.0"
+keywords = ["ai", "gamedev", "utility-ai", "bevy"]
+categories = ["game-development", "no-std"]
+readme = "README.md"
+repository = "https://github.com/scrdest/Cranium"
 
 [dependencies]
 bevy = { version = "0.17.3", default-features = false, features = ["file_watcher", "embedded_watcher"] }
