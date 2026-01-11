@@ -1,5 +1,9 @@
 # Cranium
 
+[![License](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/scrdest/Cranium/blob/master/LICENSE.md)
+[![Crates.io](https://img.shields.io/crates/v/cranium.svg)](https://crates.io/crates/cranium)
+[![Downloads](https://img.shields.io/crates/d/cranium.svg)](https://crates.io/crates/cranium)
+
 **Mission Statement:** 
 
 > See more vibrant, interesting, living and breathing virtual worlds in games  
