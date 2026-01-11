@@ -370,10 +370,7 @@ fn main() {
     .register_consideration(example_consideration_three, "e2e::DistanceToPawn2d")
     .register_context_fetcher(example_context_fetcher, EXAMPLE_CONTEXT_FETCHER_NAME)
     .register_utility_curve(leaky_curve, "e2e::Linear50pHardLeak")
-    .register_action_handler(
-        ActionPickCallback::new(example_action_handler), 
-        "e2e::ExampleAction"
-    )
+    .register_action_handler(example_action_handler, "e2e::ExampleAction")
     
     // Setting up various demo Entities
     .add_systems(Startup, (
@@ -387,4 +384,13 @@ fn main() {
     ;
 
     app.run();
+
+    bevy::log::info!("All actions finished - Bevy app exited successfully. Exiting Cortex shortly...");
+    // Delay the exit to let people using one-off terminal windows see what's going on.
+    let mut counter = 0u32;
+    while counter < 1_000 {
+        counter += 1;
+        #[cfg(feature = "std")]
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }

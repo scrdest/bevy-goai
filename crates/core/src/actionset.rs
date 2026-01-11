@@ -4,8 +4,8 @@ use crate::actions::{ActionTemplate};
 #[cfg(feature = "actionset_loader")]
 use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Asset, Reflect)]
-#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Reflect)]
+#[cfg_attr(any(feature = "actionset_loader"), derive(Serialize, Deserialize, Asset))]
 pub struct ActionSet {
     pub name: String,
     pub actions: crate::types::CortexList<ActionTemplate>,

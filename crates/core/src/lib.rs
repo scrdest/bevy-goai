@@ -1,3 +1,5 @@
+#![no_std]
+
 pub mod ai;
 pub mod actions;
 pub mod actionset;

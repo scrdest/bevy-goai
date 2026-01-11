@@ -6,6 +6,7 @@
 //! 
 //! Note that other Bevy libraries and your own custom code may extend this 
 //! with additional AssetSources.
+#![no_std]
 
 mod loader;
 

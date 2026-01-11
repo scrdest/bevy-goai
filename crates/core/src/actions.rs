@@ -185,6 +185,12 @@ impl ActionPickCallback {
     }
 }
 
+impl<F: 'static + Send + Sync + FnMut(ActionHandlerInputs, Commands)> From<F> for ActionPickCallback {
+    fn from(value: F) -> Self {
+        Self::new(value)
+    }
+}
+
 #[derive(Default, Resource)]
 pub struct ActionHandlerKeyToSystemMap {
     pub mapping: CortexKvMap<
@@ -202,20 +208,22 @@ pub struct ActionHandlerKeyToSystemMap {
 /// unless you want to be explicit about it.
 pub trait AcceptsActionHandlerRegistrations {
     fn register_action_handler<
+        ITF: Into<ActionPickCallback>, 
         IS: Into<String>,
     >(
         &mut self, 
-        trigger_fn: ActionPickCallback, 
+        trigger_fn: ITF, 
         key: IS,
     ) -> &mut Self;
 }
 
 impl AcceptsActionHandlerRegistrations for App {
     fn register_action_handler<
+        ITF: Into<ActionPickCallback>, 
         IS: Into<String>,
     >(
         &mut self, 
-        trigger_fn: ActionPickCallback, 
+        trigger_fn: ITF, 
         key: IS,
     ) -> &mut Self{
         self.world_mut().register_action_handler(trigger_fn, key);
@@ -225,13 +233,15 @@ impl AcceptsActionHandlerRegistrations for App {
 
 impl AcceptsActionHandlerRegistrations for World {
     fn register_action_handler<
+        ITF: Into<ActionPickCallback>, 
         IS: Into<String>,
     >(
         &mut self, 
-        trigger_fn: ActionPickCallback, 
+        trigger_fn: ITF, 
         key: IS,
     ) -> &mut Self {
         let system_key: ActionKey = key.into();
+        let callback = trigger_fn.into();
         let cell = self.as_unsafe_world_cell();
 
         let mut system_registry = match unsafe { cell.world_mut() }.get_non_send_resource_mut::<ActionHandlerKeyToSystemMap>() {
@@ -244,11 +254,12 @@ impl AcceptsActionHandlerRegistrations for World {
 
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            trigger_fn
+            callback
         );
         match old {
             None => {},
             Some(_) => {
+                #[cfg(feature = "logging")]
                 bevy::log::warn!(
                     "Detected a key collision for key {:?}. Ejecting previous registration...",
                     system_key

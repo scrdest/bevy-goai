@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.17.3", features = ["dynamic_linking"] }
+bevy = { version = "0.17.3", default-features = false }
 cortex-core = {path = "../core"}
 cortex-actionset-loader = {path = "../actionset_loader", optional = true}
+
+[dev-dependencies]
+bevy = { version = "0.17.3", default-features = false, features = ["dynamic_linking"] }
 
 [features]
 default = []
@@ -16,6 +19,10 @@ include_actionset_loader = [
     "cortex-actionset-loader"
 ]
 
+logging = ["bevy/bevy_log", "cortex-core/logging", "cortex-actionset-loader?/logging"]
+
+std = ["cortex-core/std", "cortex-actionset-loader?/std"]
+nostd_support = ["cortex-core/nostd_support", "cortex-actionset-loader?/nostd_support"]
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

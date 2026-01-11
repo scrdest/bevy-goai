@@ -1,8 +1,10 @@
 extern crate alloc;
 use alloc::sync::Arc;
-use std::sync::{RwLock};
+use alloc::string::String;
+use alloc::borrow::ToOwned;
+
 use bevy::prelude::*;
-use crate::types::{self, ActionContext, AiEntity, CortexKvMap, PawnEntityRef};
+use crate::types::{self, ActionContext, AiEntity, CortexKvMap, CortexRwLock, PawnEntityRef};
 use crate::identifiers::ContextFetcherIdentifier;
 
 
@@ -75,14 +77,14 @@ impl<
 
 #[derive(Clone)]
 pub struct ContextFetcherMappedToSystem {
-    pub context_fetcher_system: Result<Arc<RwLock<dyn ContextFetcherSystem>>, ()>,
+    pub context_fetcher_system: Result<Arc<CortexRwLock<dyn ContextFetcherSystem>>, ()>,
 }
 
 #[derive(Resource, Default)]
 pub struct ContextFetcherKeyToSystemMap {
     pub mapping: CortexKvMap<
         types::ContextFetcherKey, 
-        Arc<RwLock<dyn ContextFetcherSystem>>
+        Arc<CortexRwLock<dyn ContextFetcherSystem>>
     >
 }
 
@@ -138,12 +140,13 @@ impl AcceptsContextFetcherRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ContextFetcherKeyToSystemMap>();            
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            Arc::new(RwLock::new(
+            Arc::new(CortexRwLock::new(
                 system
             )));
         match old {
             None => {},
             Some(_) => {
+                #[cfg(feature = "logging")]
                 bevy::log::warn!(
                     "Detected a key collision for key {:?}. Ejecting previous registration...",
                     system_key
@@ -204,15 +207,27 @@ pub fn reinit_cf_queries(world: &mut World) {
     };
 
     registry.mapping.iter_mut().for_each(|(key, system_lock)| {
-        match system_lock.write() {
-            Ok(mut system) => {
-                // SAFETY: This is an Exclusive System, so we are the only one with World access, 
-                //         and we are the only ones with a lock on the initialized System.
-                //         We only really need this to bypass a silly borrow-check on &muts.
-                bevy::log::debug!("reinit_cf_queries: Reinitializing System {:?}", key);
-                system.initialize(unsafe { world_cell.world_mut() });
-            },
-            Err(e) => panic!("{:?}", e)
+        let write_state = system_lock.write();
+        #[cfg(all(feature = "std", not(feature = "nostd_support")))]
+        {
+            match write_state {
+                Ok(mut system) => {
+                    // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+                    //         and we are the only ones with a lock on the initialized System.
+                    //         We only really need this to bypass a silly borrow-check on &muts.
+                    #[cfg(feature = "logging")]
+                    bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+                    system.initialize(unsafe { world_cell.world_mut() });
+                },
+                Err(e) => panic!("{:?}", e)
+            }
+        }
+        #[cfg(feature = "nostd_support")]
+        {
+            let mut system = write_state;
+            #[cfg(feature = "logging")]
+            bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+            system.initialize(unsafe { world_cell.world_mut() });
         }
     });
 }

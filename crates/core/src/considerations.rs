@@ -1,10 +1,12 @@
 extern crate alloc;
+
 use alloc::sync::Arc;
-use std::sync::{RwLock};
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 
 use bevy::prelude::*;
 
-use crate::types::{self, ActionContextRef, AiEntity, CortexKvMap, PawnEntityRef};
+use crate::types::{self, ActionContextRef, AiEntity, CortexKvMap, CortexRwLock, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
 
 #[cfg(any(feature = "actionset_loader"))]
@@ -116,7 +118,7 @@ pub struct ConsiderationMappedToSystem {
     // NOTE: This is Result<T> as the registry lookup is fallible 
     //       and we will need to propagate these errors later on.
     // pub consideration_systemid: Result<types::ConsiderationSignature, ()>,
-    pub consideration_system: Result<Arc<RwLock<dyn ConsiderationSystem>>, ()>,
+    pub consideration_system: Result<Arc<CortexRwLock<dyn ConsiderationSystem>>, ()>,
     pub curve_name: CurveIdentifier,
 
     pub min: types::ActionScore,
@@ -128,7 +130,7 @@ pub struct ConsiderationMappedToSystem {
 pub struct ConsiderationKeyToSystemMap {
     pub mapping: CortexKvMap<
         ConsiderationIdentifier, 
-        Arc<RwLock<dyn ConsiderationSystem>>
+        Arc<CortexRwLock<dyn ConsiderationSystem>>
     >
 }
 
@@ -184,12 +186,13 @@ impl AcceptsConsiderationRegistrations for World {
         let mut system_registry = self.get_resource_or_init::<ConsiderationKeyToSystemMap>();
         let old = system_registry.mapping.insert(
             system_key.to_owned(), 
-            Arc::new(RwLock::new(
+            Arc::new(CortexRwLock::new(
                 system
             )));
         match old {
             None => {},
             Some(_) => {
+                #[cfg(feature = "logging")]
                 bevy::log::warn!(
                     "Detected a key collision for key {:?}. Ejecting previous registration...",
                     system_key
@@ -250,15 +253,27 @@ pub fn reinit_consideration_queries(world: &mut World) {
     };
 
     registry.mapping.iter_mut().for_each(|(key, system_lock)| {
-        match system_lock.write() {
-            Ok(mut system) => {
-                // SAFETY: This is an Exclusive System, so we are the only one with World access, 
-                //         and we are the only ones with a lock on the initialized System.
-                //         We only really need this to bypass a silly borrow-check on &muts.
-                bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
-                system.initialize(unsafe { world_cell.world_mut() });
-            },
-            Err(e) => panic!("{:?}", e)
+        let write_state = system_lock.write();
+        #[cfg(all(feature = "std", not(feature = "nostd_support")))]
+        {
+            match write_state {
+                Ok(mut system) => {
+                    // SAFETY: This is an Exclusive System, so we are the only one with World access, 
+                    //         and we are the only ones with a lock on the initialized System.
+                    //         We only really need this to bypass a silly borrow-check on &muts.
+                    #[cfg(feature = "logging")]
+                    bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+                    system.initialize(unsafe { world_cell.world_mut() });
+                },
+                Err(e) => panic!("{:?}", e)
+            }
+        }
+        #[cfg(feature = "nostd_support")]
+        {
+            let mut system = write_state;
+            #[cfg(feature = "logging")]
+            bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+            system.initialize(unsafe { world_cell.world_mut() });
         }
     });
 }

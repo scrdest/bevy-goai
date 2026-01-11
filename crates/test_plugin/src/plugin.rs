@@ -1,3 +1,4 @@
+#[cfg(feature = "logging")]
 use bevy::log::LogPlugin;
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 
@@ -11,6 +12,7 @@ impl Plugin for CortexTestPlugin {
         app
         .add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(core::time::Duration::from_millis(200))),
+            #[cfg(feature = "logging")]
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 

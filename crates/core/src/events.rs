@@ -40,6 +40,7 @@ impl AiActionPicked {
         action_score: crate::types::ActionScore,
     ) -> Self {
         
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "Creating a new AiActionPicked event for {:?} with key {:?} ({:?})",
             ai_owner,
@@ -128,6 +129,7 @@ impl AiActionDispatchToUserCode {
         action_score: crate::types::ActionScore,
     ) -> Self {
         
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "Creating a new AiActionDispatchToUserCode event for {:?} with key {:?} ({:?})",
             ai_owner,
@@ -150,6 +152,7 @@ impl AiActionDispatchToUserCode {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "logging")]
     use bevy::log::LogPlugin;
     use bevy::{app::ScheduleRunnerPlugin, prelude::*};
     use super::*;
@@ -206,6 +209,7 @@ mod tests {
         trigger: On<TestActionEvent>
     ) {
         let evt = trigger.event();
+        #[cfg(feature = "logging")]
         bevy::log::debug!("Processing event {:?}", evt);
     }
 
@@ -216,6 +220,7 @@ mod tests {
         app
         .add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_once()),
+            #[cfg(feature = "logging")]
             LogPlugin { 
                 level: bevy::log::Level::DEBUG, 
                 custom_layer: |_| None, 

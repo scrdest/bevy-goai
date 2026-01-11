@@ -1,3 +1,6 @@
+extern crate alloc;
+use alloc::string::String;
+
 /// A convenient type wrapping Entity with an optional Name.
 /// Acts as either an Entity or a Name for Display purposes based on what it holds. 
 /// Otherwise acts as an Entity for any other purpose.

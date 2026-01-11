@@ -5,9 +5,9 @@
 > See more vibrant, interesting, living and breathing virtual worlds in games  
 > by making it as easy as possible for developers to create and run them efficiently.
 
-`Cortex` is an opinionated, modular, data-driven (and data-oriented) Rust library 
-for 'classical' AI (primarily but not exclusively Utility AI) for interactive applications 
-such as games and simulations.
+`Cortex` is an opinionated, modular, no_std-friendly (if you have access to alloc), 
+data-driven (and data-oriented) Rust library for 'classical' AI (primarily but not 
+exclusively Utility AI) for interactive applications such as games and simulations.
 
 `Cortex` is built using the [Bevy Game Engine](https://bevyengine.org/). 
 
@@ -126,6 +126,33 @@ fn example_consideration(
     val.into()
 }
 
+/// This is an example event that lives in *your game code* (not in Cortex) and handles movement triggers.
+#[derive(EntityEvent)]
+struct MoveTo(Entity, Entity)
+
+/// This is a (very crude) movement Action implementation that lives in *your game code* (no offense!), 
+/// not in Cortex - Cortex likely does not even know it exists at all.
+/// For each MoveTo event, moves some Entity (MoveTo.0) one step towards the target Entity (MoveTo.1).
+/// To keep things simple, we are assuming both Entities actually exist and have `Position2d`s.
+fn user_movement_observer(event: On<MoveTo>, pos_qry: Query<&Position2d>) {
+    let pawn = &event.0;
+    let target = &event.1;
+
+    let mut pawn_pos = pos_qry.get_mut(pawn).unwrap();
+    let target_pos = pos_qry.get(target).unwrap();
+
+    pawn_pos.move_towards(target_pos, 1.);
+}
+
+/// ActionHandlers bridge the gap between Cortex and your own game logic by using Commands 
+/// to raise Events, write Messages, spawn Entities, or whatever else your game responds to. 
+fn example_action_handler(inputs: ActionHandlerInputs, mut commands: Commands) {
+    // ActionHandlers always receive the same, standard parameters - they are functions, not Systems!
+    let (ai, pawn, ctx) = inputs;
+    // We'll build a MoveTo event and trigger it, which will itself trigger a `user_movement_observer()`.
+    commands.trigger(MoveTo(pawn, ctx));
+}
+
 // Putting it all together. You can easily port this example to a Plugin impl instead to wrap
 // your AI integration into a nice, portable bundle you can drop into your real `main()`.
 fn main() {
@@ -144,6 +171,7 @@ fn main() {
         // with the actual name of the function, and that we could register 
         // many different keys mapped to the same implementation!
         .register_consideration(example_consideration, "mycode::distance2d")
+        .register_action_handler(example_action_handler, "mycode::move_to")
     ;
 
     app.run()
@@ -232,10 +260,12 @@ For the **AI Server** integration, `Cortex` provides an API that lets you set up
 a Bevy ECS World for the AI to operate in, and methods to update this world with data from 
 your own application.
 
-In either case, you will nearly always need to tailor three things to your needs:
-1) ContextFetchers 
-2) Considerations 
-3) Actions
+In either case, you will nearly always need to tailor four things to your needs:
+
+1) ContextFetchers (registered with `app.register_context_fetcher(func, key)`)
+2) Considerations (registered with `app.register_consideration(func, key)`)
+3) ActionHandlers (registered with `app.register_action_handler(func, key)`)
+4) Actions proper (not registered; wire them up to whatever you do in ActionHandlers).
 
 
 #### ContextFetchers 
@@ -261,9 +291,8 @@ Once you're done building your `ContextFetchers`, you can register them to the W
 using either the classic App Builder-style `app.register_context_fetcher(func, key)` or on 
 the World directly using `world.register_context_fetcher(func, key)`. 
 
-If you cannot see the method available, check your imports. 
-Rust's type system will stop you from registering a `ContextFetcher` if there is something 
-wrong with the function you have built. If you cannot see the function, check your imports. 
+Rust's type system will stop you from registering a `ContextFetcher` if there is anything 
+wrong with the function you have built. 
 
 
 #### Considerations 
@@ -283,6 +312,45 @@ Once you're done building your Consideration(s), you can register them easily us
 either the classic App Builder-style `app.register_consideration(func, key)` or on 
 the World directly using `world.register_consideration(func, key)`. 
 
-If you cannot see the method available, check your imports. 
-Rust's type system will stop you from registering a Consideration if there is something 
+Rust's type system will stop you from registering a Consideration if there is anything 
+wrong with the function you have built. 
+
+
+#### Actions & ActionHandlers
+
+Deciding what's the best `Action` is well and good, but pretty pointless on its own. 
+Cortex needs to have a way of telling the application it's working for what to *do*.
+
+Cortex cannot - and should not - mandate an implementation style for *your* code. 
+Instead, we use a translation layer of `ActionHandlers`.
+
+An `ActionHandler` is a function - ANY function - that takes a set of standard inputs 
+as defined by Cortex (basic helpful details - AI, Pawn & Context), plus `mut Commands`.
+
+`ActionHandlers` will be triggered by Cortex at appropriate times and are expected to 
+use the Commands to raise Events, write Messages, spawn Entities, or whatever else it 
+is that you've wired your own game logic to respond to to trigger Stuff Happening.
+
+`ActionHandlers` are registered into Cortex (much like Considerations/CFs/etc.) using an associated Key. 
+This should correspond to the `ActionKey` field of *at least one* `ActionTemplate`. 
+
+If that `ActionTemplate` gets picked, Cortex will trigger the corresponding ActionHandler, which 
+should then trigger whichever game-logic implementation you have for that ActionTemplate.
+
+For example, if an `ActionTemplate` with an `ActionKey` of `"mycode::Move"` gets picked, 
+Cortex will look for an ActionHandler registered with `"mycode::Move"` as the Key. 
+
+Suppose it finds a `move_action_handler(...)` - which builds and triggers a custom Event defined in 
+your own game code, `MovementRequest(Entity, Entity)` that you have wired up to your own Observers, 
+who will set up some NPC to start moving towards a target location. Job done! 
+
+Cortex does not really care about all that - once the `ActionHandler` has been triggered, 
+the library's job is done until the time comes to select another Action for execution. 
+Your game code is entirely within your power, as long as you use normal Bevy machinery to run it.
+
+Once you're done building your ActionHandler(s), you can register them easily using 
+either the classic App Builder-style `app.register_action_handler(func, key)` or on 
+the World directly using `world.register_action_handler(func, key)`. 
+
+Rust's type system will stop you from registering an ActionHandler if there is anything 
 wrong with the function you have built. 

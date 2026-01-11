@@ -64,6 +64,7 @@ fn consideration_adjustment(
     let makeup_val = (1. - score) * modification_factor;
     let adjusted_score = score + (makeup_val * score);
 
+    #[cfg(feature = "logging")]
     bevy::log::debug!(
         "Adjusted raw score {:?} w/ {:?} Considerations (float: {:?}) to {:?}",
         score,
@@ -171,6 +172,7 @@ pub fn decision_engine(
     if exist_check.is_err() {
         // Early termination - the AI the decision was requested for either got despawned or the request 
         // was malformed and was pointed at something that was not an AI in the first place.
+        #[cfg(feature = "logging")]
         bevy::log::debug!("decision_engine: Decision request target {:?} is not an AI - ignoring the request.", audience);
         return;
     }
@@ -186,6 +188,7 @@ pub fn decision_engine(
     if is_disabled {
         // Early termination - this AI is disabled; generally we'd hope AiDecisionRequested would not even
         // fire in the first place, but weird things can sometimes happen in sufficiently big projects...
+        #[cfg(feature = "logging")]
         bevy::log::debug!("decision_engine: AI {:?} disabled by LOD - ignoring decision request.", audience);
         return;
     }
@@ -208,6 +211,7 @@ pub fn decision_engine(
             // Early return - we have no real options in this case.
             // Note that there is no notion of available Actions *NOT* tied to a SO; at
             // minimum, you'd have a SO with the key representing *the Controller itself*.
+            #[cfg(feature = "logging")]
             bevy::log::debug!("decision_engine: AI {:?} - no SmartObjects available, idling", audience);
             return;
         }
@@ -227,6 +231,7 @@ pub fn decision_engine(
         .map(|act| ThreadSafeRef::new(act))
     });
 
+    #[cfg(feature = "logging")]
     bevy::log::debug!(
         "decision_engine: AI {:?} - available Actions are: {:#?}", 
         audience, &smartobjects.actionset_refs
@@ -235,6 +240,7 @@ pub fn decision_engine(
     // 2. Emit a request for Context for each ActionTemplate.
     for action_template in available_actions {
         if !action_template.is_within_lod_range(&lod_level) {
+            #[cfg(feature = "logging")]
             bevy::log::debug!(
                 "decision_engine: AI {:?} - skipping Template {:?} - current LOD {:?} does not allow for processing.", 
                 &action_template.name, &audience, &lod_level,
@@ -242,6 +248,7 @@ pub fn decision_engine(
             continue;
         }
 
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "decision_engine: AI {:?} - requesting Contexts for Template {:?} from CF {:?}", 
             &audience, &action_template.name, &action_template.context_fetcher_name,
@@ -254,34 +261,50 @@ pub fn decision_engine(
 
         let contexts = match cf_system {
             Some(system_guard) => {
-                let res = system_guard.write().map(|mut cf_system| {
-                    cf_system.run_readonly(
+                #[cfg(all(feature = "std", not(feature = "nostd_support")))]
+                let res = {
+                    let res = system_guard.write().map(|mut cf_system| {
+                        cf_system.run_readonly(
+                            (
+                                audience,
+                                maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
+                            ),
+                            world_ref,
+                        )
+                    });
+
+                    if res.is_err() {
+                        #[cfg(feature = "logging")]
+                        bevy::log::error!(
+                            "decision_engine: AI {:?} - ContextFetcher '{:?}' errored - lock poisoned ({:?})!", 
+                            &audience, 
+                            &action_template.context_fetcher_name, 
+                            &res,
+                        );
+                        // If we ever skipped the panic below, this should be uncommented
+                        // continue;
+
+                        // If the lock has been poisoned, we've had a panic inside it, 
+                        // so we're in uncharted waters - abort before things get worse.
+                        panic!("decision_engine: ContextFetcher failed - lock poisoned!");
+                    };
+
+                    res.unwrap()
+                };
+
+                #[cfg(all(feature = "nostd_support"))]
+                let res = {
+                    system_guard.write().run_readonly(
                         (
                             audience,
                             maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
                         ),
                         world_ref,
                     )
-                });
-
-                if res.is_err() {
-                    bevy::log::error!(
-                        "decision_engine: AI {:?} - ContextFetcher '{:?}' errored - lock poisoned ({:?})!", 
-                        &audience, 
-                        &action_template.context_fetcher_name, 
-                        &res,
-                    );
-                    // If we ever skipped the panic below, this should be uncommented
-                    // continue;
-
-                    // If the lock has been poisoned, we've had a panic inside it, 
-                    // so we're in uncharted waters - abort before things get worse.
-                    panic!("decision_engine: ContextFetcher failed - lock poisoned!");
                 };
 
-                let res = res.unwrap();
-
                 if res.is_err() {
+                    #[cfg(feature = "logging")]
                     bevy::log::error!(
                         "decision_engine: AI {:?} - ContextFetcher '{:?}' errored: {:?}", 
                         &audience, 
@@ -294,6 +317,7 @@ pub fn decision_engine(
                 res.expect("decision_engine: ContextFetcher result is Err - this should not be possible!")
             },
             None => {
+                #[cfg(feature = "logging")]
                 bevy::log::error!(
                     "decision_engine: AI {:?} - ContextFetcher key '{:?}' could not be resolved to a System!", 
                     &audience, 
@@ -311,6 +335,7 @@ pub fn decision_engine(
 
             let ctx_ref = ctx;
             
+            #[cfg(feature = "logging")]
             bevy::log::debug!("decision_engine: AI {:?} - processing Ctx {:?} for Action {:?}", 
                 &audience,
                 &ctx_ref, 
@@ -366,6 +391,7 @@ pub fn decision_engine(
                             // This is a duplicate of the Panic strategy as indicated by the Default impl. 
                             // We COULD create a fallback value earlier, but that would cost us an extra 
                             // `.clone()` that we can kinda do without here just as well.
+                            #[cfg(feature = "logging")]
                             bevy::log::error!(
                                 "decision_engine: AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, default behavior - panicking!", 
                                 &audience,
@@ -375,6 +401,7 @@ pub fn decision_engine(
                         },
 
                         Some(crate::errors::NoCurveMatchStrategy::Panic) => {
+                            #[cfg(feature = "logging")]
                             bevy::log::error!(
                                 "decision_engine: AI {:?} - Failed to resolve Curve key {:?} to a SupportedUtilityCurve, panicking!", 
                                 &audience,
@@ -384,6 +411,7 @@ pub fn decision_engine(
                         },
 
                         Some(crate::errors::NoCurveMatchStrategy::SkipConsiderationWithLog) => {
+                            #[cfg(feature = "logging")]
                             bevy::log::warn!(
                                 "decision_engine: AI {:?} - failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping Consideration {:?}!", 
                                 &audience,
@@ -394,6 +422,7 @@ pub fn decision_engine(
                         },
 
                         Some(crate::errors::NoCurveMatchStrategy::SkipActionWithLog) => {
+                            #[cfg(feature = "logging")]
                             bevy::log::warn!(
                                 "decision_engine: AI {:?} - failed to resolve Curve key {:?} to a SupportedUtilityCurve, skipping ActionTemplate {:?}!", 
                                 &audience,
@@ -406,6 +435,7 @@ pub fn decision_engine(
                         Some(crate::errors::NoCurveMatchStrategy::DefaultCurveWithLog(curve_resolver)) => {
                             let resolved = curve_resolver(cons.curve_name.borrow());
                             
+                            #[cfg(feature = "logging")]
                             bevy::log::warn!(
                                 "AI {:?} - Curve key {:?} resolved using fallback Curve {:?}", 
                                 &audience,
@@ -432,6 +462,7 @@ pub fn decision_engine(
 
                 match consideration_system {
                     None => {
+                        #[cfg(feature = "logging")]
                         bevy::log::error!(
                             "decision_engine: AI {:?} - Failed to resolve Consideration '{:}' to a System!", 
                             &audience,
@@ -443,33 +474,50 @@ pub fn decision_engine(
                     },
 
                     Some(system_guard) => {
-                        let res = system_guard
-                            .write()
-                            .map(|mut consideration_system| {
-                                consideration_system.run_readonly(
-                                (
-                                        audience.entity(),
-                                        maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
-                                        ctx_ref.clone(),
-                                    ),
-                                    world_ref,
-                                )
-                            })
-                        ;
+                        let system_state = system_guard.write();
+                        
+                        #[cfg(all(feature = "std", not(feature = "nostd_support")))]
+                        {
+                            let res = system_state
+                                .map(|mut consideration_system| {
+                                    consideration_system.run_readonly(
+                                    (
+                                            audience.entity(),
+                                            maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
+                                            ctx_ref.clone(),
+                                        ),
+                                        world_ref,
+                                    )
+                                })
+                            ;
+                            if res.is_err() {
+                                #[cfg(feature = "logging")]
+                                bevy::log::error!(
+                                    "AI {:?} - Consideration '{:}' errored - lock poisoned ({:?})!", 
+                                    &audience, 
+                                    &cons.consideration_name, 
+                                    &res
+                                );
+                                // Uncomment if the panic! below is ever removed:
+                                // break;
+                                panic!("Consideration failed - lock poisoned!");
+                            };
 
-                        if res.is_err() {
-                            bevy::log::error!(
-                                "AI {:?} - Consideration '{:}' errored - lock poisoned ({:?})!", 
-                                &audience, 
-                                &cons.consideration_name, 
-                                &res
-                            );
-                            // Uncomment if the panic! below is ever removed:
-                            // break;
-                            panic!("Consideration failed - lock poisoned!");
+                            res.unwrap()
+                        }
+
+                        #[cfg(all(feature = "nostd_support"))]
+                        let res = {
+                            let mut consideration_system = system_state;
+                            consideration_system.run_readonly(
+                            (
+                                    audience.entity(),
+                                    maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
+                                    ctx_ref.clone(),
+                                ),
+                                world_ref,
+                            )
                         };
-
-                        let res = res.unwrap();
 
                         if res.is_err() {
                             curr_score = types::MIN_CONSIDERATION_SCORE - 1.;
@@ -478,6 +526,7 @@ pub fn decision_engine(
 
                         let raw_score = match res {
                             Err(e) => {
+                                #[cfg(feature = "logging")]
                                 bevy::log::error!(
                                     "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
                                     &audience, 
@@ -497,6 +546,7 @@ pub fn decision_engine(
                                     // all have SomeRandomComponent but the ContextFetcher returned one without it somehow).
                                     //
                                     // This is distinct from returning zero, as zero 
+                                    #[cfg(feature = "logging")]
                                     bevy::log::info!(
                                         "decision_engine: AI {:?} - Consideration '{:}' returned a None score, indicating a nonfatal error. Defaulting to zero score.", 
                                         &audience, 
@@ -511,6 +561,7 @@ pub fn decision_engine(
                         let (true_min, true_max) = match cons.min <= cons.max {
                             true => (cons.min, cons.max),
                             false => {
+                                #[cfg(feature = "logging")]
                                 bevy::log::error!(
                                     "Min/Max values for Consideration {:?} in Action {:?} 
                                     were flipped, min={:?} > max={:?}. 
@@ -536,6 +587,7 @@ pub fn decision_engine(
                         // The actual (raw) score is the product of all Consideration scores so far.
                         curr_score *= score;
 
+                        #[cfg(feature = "logging")]
                         bevy::log::debug!(
                             "decision_engine: AI {:?} - Consideration '{:}' for Action {:?}:  
                             - Raw score => {:?}
@@ -561,6 +613,7 @@ pub fn decision_engine(
                         };
 
                         if !curr_beats_old_best {
+                            #[cfg(feature = "logging")]
                             bevy::log::debug!(
                                 "decision_engine: AI {:?} - Consideration '{:}' for Action {:?} - curr_score {:?} is below the template best of {:?}, discarding the Context.",
                                 audience,
@@ -606,6 +659,7 @@ pub fn decision_engine(
 
             match prioritized_score > curr_best_for_ai.unwrap_or(types::MIN_CONSIDERATION_SCORE) {
                 false => {
+                    #[cfg(feature = "logging")]
                     bevy::log::debug!(
                         "AI {:?} - Score for Action {:?} = {:?} is below the current best of {:?}. Ignoring.",
                         &audience,
@@ -615,6 +669,7 @@ pub fn decision_engine(
                     );
                 },
                 true => {
+                    #[cfg(feature = "logging")]
                     bevy::log::debug!(
                         "AI {:?} - Score for Action {:?} = {:?} beats the current best of {:?}. Promoting to new best.",
                         &audience,
@@ -632,6 +687,7 @@ pub fn decision_engine(
     
     match best_scoring_triple {
         None => {
+            #[cfg(feature = "logging")]
             bevy::log::info!(
                 "decision_engine: AI {:?} - no suitable Actions found.",
                 &audience,
@@ -645,6 +701,7 @@ pub fn decision_engine(
                 best_context
             ) = best_tuple;
 
+            #[cfg(feature = "logging")]
             bevy::log::info!(
                 "decision_engine: AI {:?} - Picking Action {:?} w/ Score {:?}.", 
                 &audience,
@@ -671,6 +728,7 @@ pub fn trigger_dispatch_to_user_actions(
 ) {
     let event = trigger.event();
     let action_key = &event.action_key;
+    #[cfg(feature = "logging")]
     bevy::log::debug!(
         "dispatch_to_user_actions - Running for Action {:?} for Pick Event {:?}",
         action_key, event
@@ -695,6 +753,7 @@ pub fn handle_dispatch_to_user_actions(
     for msg in reader.read() {
         let action_key = &msg.action_key;
     
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "dispatch_to_user_actions - Running for Action {:?} for message {:?}",
             &action_key, &msg
@@ -703,6 +762,7 @@ pub fn handle_dispatch_to_user_actions(
         let callback = match callback_registry.mapping.get_mut(action_key) {
             Some(cb) => cb,
             None => {
+                #[cfg(feature = "logging")]
                 bevy::log::error!(
                     "dispatch_to_user_actions - Could not resolve ActionKey {:?} to a registered ActionPickCallback, skipping!",
                     action_key

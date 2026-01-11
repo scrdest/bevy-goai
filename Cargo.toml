@@ -7,25 +7,33 @@ edition = "2024"
 resolver = "2"
 members = [
   "crates/*",
-#   "examples/*"
 ]
 
 [dependencies]
-bevy = { version = "0.17.3", features = ["dynamic_linking"] }
 cortex-core = {path = "crates/core"}
 cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = true}
 cortex-actionset-loader = {path = "crates/actionset_loader", optional = true}
 cortex-test-plugin = {path = "crates/test_plugin", optional = true}
 
 [dev-dependencies]
+bevy = { version = "0.17.3", default-features = false}
+cortex-core = {path = "crates/core", features = ["nostd_support"] }
 cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
 cortex-test-plugin = {path = "crates/test_plugin", optional = false}
 
 [features]
-default = []
+default = ["logging", "std"]
+
+bevy_dynamic_linking = ["bevy/dynamic_linking"]
+
+std = [
+  "cortex-core/std",
+  "cortex-actionset-loader?/std"
+]
 
 # Provides a way to load ActionSets as Assets from the filesystem.
 actionset_loader = [
+  "cortex-core/actionset_loader", 
   "cortex-actionset-loader",
 ]
 
@@ -44,10 +52,49 @@ bevy_native = [
   "bevy_plugin"
 ]
 
+logging = [
+  "bevy/bevy_log", 
+  "cortex-core/logging",
+  "cortex-actionset-loader?/logging"
+]
+
 # Everything needed to run tests.
 testing = [
   "cortex-test-plugin",
   "cortex-bevy-plugin",
+]
+
+nostd_support = [
+    "cortex-core/nostd_support",
+    "cortex-actionset-loader?/nostd_support",
+]
+
+json_support = [
+    "cortex-actionset-loader?/json_support"
+]
+
+yaml_support = [
+    "cortex-actionset-loader?/yaml_support"
+]
+
+toml_support = [
+    "cortex-actionset-loader?/toml_support"
+]
+
+cbor_support = [
+    "cortex-actionset-loader?/cbor_support"
+]
+
+msgpack_support = [
+    "cortex-actionset-loader?/msgpack_support"
+]
+
+ron_support = [
+    "cortex-actionset-loader?/ron_support"
+]
+
+postcard_support = [
+    "cortex-actionset-loader?/postcard_support"
 ]
 
 all = [
@@ -56,6 +103,13 @@ all = [
   "bevy_plugin",
   "bevy_native",
   "testing",
+  "json_support",
+  "yaml_support",
+  "toml_support",
+  "cbor_support",
+  "msgpack_support",
+  "ron_support",
+  "postcard_support",
 ]
 
 # Enable a small amount of optimization in the dev profile.

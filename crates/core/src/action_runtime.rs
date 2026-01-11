@@ -274,6 +274,7 @@ pub struct ActionTrackerSpawnRequested {
 impl ActionTrackerSpawnRequested {
     /// Create a new ActionTracker spawn request.
     pub fn new(entity: Entity, action: ScoredAction, config: Option<ActionTrackerSpawnConfig>) -> Self {
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "ActionTrackerSpawnRequested::new(): Creating a new ActionTrackerSpawnRequested event for Entity {:?} w/ Action {:?}", 
             entity, action
@@ -337,10 +338,11 @@ pub fn actiontracker_triggered_spawner(
     let owner_ai = event.entity;
 
     match commands.get_entity(owner_ai) {
-        Err(err) => {
+        Err(_err) => {
+            #[cfg(feature = "logging")]
             bevy::log::warn!(
                 "Attempted to spawn an ActionTracker for an AI Entity ({:?}) that no longer exists - {:?}",
-                owner_ai, err
+                owner_ai, _err
             )
         }
 
@@ -424,6 +426,7 @@ pub fn actiontracker_done_cleanup_system(
     query: Query<(Entity, &ActionTracker, &ActionTrackerState)>, 
     mut commands: Commands, 
 ) {
+    // #[cfg(feature = "logging")]
     // bevy::log::debug!("Processing ActionTracker cleanup...");
 
     for (entity, tracker, state) in query.iter() {
@@ -433,10 +436,12 @@ pub fn actiontracker_done_cleanup_system(
             ActionState::Cancelled => true,
             _ => false,
         };
-        
+
+        #[cfg(feature = "logging")]
         bevy::log::debug!("ActionTrackerCleanup: {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
 
         if is_done {
+            #[cfg(feature = "logging")]
             bevy::log::info!(
                 "ActionTrackerCleanup: Action {:?} of AI {:?} finished, cleaning up the Tracker", 
                 tracker.0.action.name, entity
@@ -532,6 +537,7 @@ fn tick_based_action_tracker_handler(
     game_timer: Res<Time>,
     real_timer: Res<Time<Real>>,
 ) {
+    #[cfg(feature = "logging")]
     bevy::log::debug!(
         "tick_based_action_tracker_handler - Running...", 
     );
@@ -540,6 +546,7 @@ fn tick_based_action_tracker_handler(
         let should_process = maybe_state.as_ref().map(|state| state.0.should_process()).unwrap_or(true);
         
         if !should_process {
+            #[cfg(feature = "logging")]
             bevy::log::debug!(
                 "tick_based_action_tracker_handler - AI {:?}: Skipping processing for Action(Tracker) {:?} - {:?}", 
                 ai, tracker.0.action.name, maybe_state
@@ -547,6 +554,7 @@ fn tick_based_action_tracker_handler(
             continue;
         }
 
+        #[cfg(feature = "logging")]
         bevy::log::debug!(
             "tick_based_action_tracker_handler: processing Action(Tracker) {:?} for {:?} - {:?}", 
             tracker.0.action.name, ai, maybe_state

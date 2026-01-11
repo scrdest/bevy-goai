@@ -1,12 +1,47 @@
 //! Type aliases and 'abstracting' newtypes.
 
+extern crate alloc;
+use alloc::{string::String};
+
 pub use crate::thread_safe_wrapper::ThreadSafeRef;
 
-/// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
-pub type CortexList<T> = Vec<T>;
+#[cfg(all(feature = "std", not(feature = "nostd_support")))]
+mod std_types {
+    extern crate std;
 
-/// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
-pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+    /// A standardized Cortex type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
+    pub type CortexRwLock<T> = std::sync::RwLock<T>;
+
+    /// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
+    pub type CortexList<T> = std::vec::Vec<T>;
+
+    /// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
+    pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+}
+
+#[cfg(all(any(feature = "nostd_support")))]
+mod nostd_types {
+    //! std-free implementations 
+    extern crate alloc;
+    
+    /// A standardized Cortex type for Read-Write Locks (i.e. std::sync::RwLock<T> or similar)
+    pub type CortexRwLock<T> = spin::RwLock<T>;
+
+    /// A standardized Cortex type for dynamic arrays (i.e. Vec<T> or equivalents)
+    pub type CortexList<T> = alloc::vec::Vec<T>;
+
+    /// A standardized Cortex type for key-value maps (generally hashmaps; HashMap or equivalent)
+    pub type CortexKvMap<K, V> = bevy::platform::collections::HashMap<K, V>;
+}
+
+// If nostd_support is enabled, it takes precedence over std. 
+// This is to ensure that libs downstream that build for maybe-no_std 
+// using both features don't get a surprise std-only datastructure.
+#[cfg(all(feature = "std", not(feature = "nostd_support")))]
+pub use std_types::*;  
+
+#[cfg(feature = "nostd_support")]
+pub use nostd_types::*;
 
 /// 
 pub type ContextFetcherKey = crate::identifiers::ContextFetcherIdentifier;

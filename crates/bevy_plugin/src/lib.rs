@@ -6,6 +6,7 @@
 //! 
 //! What's left for you to do after adding it in is registering any ContextFetchers, Considerations, 
 //! and any other of your custom Systems that you want Cortex to use
+#![no_std]
 
 mod plugin;
 

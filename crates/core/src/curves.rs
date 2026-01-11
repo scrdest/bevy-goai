@@ -36,6 +36,8 @@
 
 extern crate alloc;
 use alloc::sync::Arc;
+use alloc::string::String;
+use alloc::borrow::ToOwned;
 
 use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
 use crate::types::{ActionScore, CortexKvMap, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
@@ -1061,6 +1063,7 @@ impl AcceptsCurveRegistrations for bevy::prelude::World {
         match old {
             None => {},
             Some(_) => {
+                #[cfg(feature = "logging")]
                 bevy::log::warn!(
                     "Detected a key collision for key {:?}. Ejecting previous registration...",
                     curve_key

@@ -1,5 +1,6 @@
 extern crate alloc;
 use alloc::sync::Arc;
+use alloc::string::String;
 
 use bevy::ecs::resource::Resource;
 
