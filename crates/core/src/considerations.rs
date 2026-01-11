@@ -1,10 +1,7 @@
-extern crate alloc;
-
-use alloc::sync::Arc;
-use alloc::string::String;
-use alloc::borrow::ToOwned;
+use bevy::platform::prelude::{String, ToOwned};
 
 use bevy::prelude::*;
+use bevy::platform::sync::Arc;
 
 use crate::types::{self, ActionContextRef, AiEntity, CortexKvMap, CortexRwLock, PawnEntityRef};
 use crate::identifiers::{ConsiderationIdentifier, CurveIdentifier};
@@ -252,9 +249,8 @@ pub fn reinit_consideration_queries(world: &mut World) {
         Some(r) => r,
     };
 
-    registry.mapping.iter_mut().for_each(|(key, system_lock)| {
+    registry.mapping.iter_mut().for_each(|(_key, system_lock)| {
         let write_state = system_lock.write();
-        #[cfg(all(feature = "std", not(feature = "nostd_support")))]
         {
             match write_state {
                 Ok(mut system) => {
@@ -262,18 +258,11 @@ pub fn reinit_consideration_queries(world: &mut World) {
                     //         and we are the only ones with a lock on the initialized System.
                     //         We only really need this to bypass a silly borrow-check on &muts.
                     #[cfg(feature = "logging")]
-                    bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
+                    bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", _key);
                     system.initialize(unsafe { world_cell.world_mut() });
                 },
                 Err(e) => panic!("{:?}", e)
             }
-        }
-        #[cfg(feature = "nostd_support")]
-        {
-            let mut system = write_state;
-            #[cfg(feature = "logging")]
-            bevy::log::debug!("reinit_consideration_queries: Reinitializing System {:?}", key);
-            system.initialize(unsafe { world_cell.world_mut() });
         }
     });
 }

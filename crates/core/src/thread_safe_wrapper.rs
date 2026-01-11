@@ -6,9 +6,7 @@
 //! 
 //! The backing library's datatype should be treated as a hidden implementation detail 
 //! for the overwhelming majority of possible purposes.
-
-extern crate alloc;
-use alloc::sync::Arc;
+use bevy::platform::sync::Arc;
 
 /// The underlying 'backend' type for ThreadSafeRef
 type ThreadSafeRefValue<T> = Arc<T>;

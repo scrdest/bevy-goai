@@ -33,13 +33,9 @@
 //!    more performant due to the lack of an Arc<T> overhead and a secondary registry lookup.
 //! 4) The methods of UtilityCurveExt - if you are planning to create custom Utility Curves, this  
 //!    trait provides constructors for various transforms that are still valid as Utility Curves.
-
-extern crate alloc;
-use alloc::sync::Arc;
-use alloc::string::String;
-use alloc::borrow::ToOwned;
-
 use bevy::math::{self, curve::CurveExt, Curve, curve::Interval};
+use bevy::platform::prelude::{String, ToOwned};
+use bevy::platform::sync::Arc;
 use crate::types::{ActionScore, CortexKvMap, MIN_CONSIDERATION_SCORE, MAX_CONSIDERATION_SCORE};
 
 // Reexporting some common basic Bevy Curves for easy access when building custom user Curves.

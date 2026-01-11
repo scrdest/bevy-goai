@@ -14,9 +14,10 @@ cortex-core = {path = "crates/core"}
 cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = true}
 cortex-actionset-loader = {path = "crates/actionset_loader", optional = true}
 cortex-test-plugin = {path = "crates/test_plugin", optional = true}
+cortex-api = {path = "crates/cortex_api", optional = true}
 
 [dev-dependencies]
-bevy = { version = "0.17.3", default-features = false}
+bevy = { version = "0.17.3", default-features = false, features = ["debug"]}
 cortex-core = {path = "crates/core", features = ["nostd_support"] }
 cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
 cortex-test-plugin = {path = "crates/test_plugin", optional = false}

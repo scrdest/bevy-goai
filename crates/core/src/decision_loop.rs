@@ -261,7 +261,6 @@ pub fn decision_engine(
 
         let contexts = match cf_system {
             Some(system_guard) => {
-                #[cfg(all(feature = "std", not(feature = "nostd_support")))]
                 let res = {
                     let res = system_guard.write().map(|mut cf_system| {
                         cf_system.run_readonly(
@@ -290,17 +289,6 @@ pub fn decision_engine(
                     };
 
                     res.unwrap()
-                };
-
-                #[cfg(all(feature = "nostd_support"))]
-                let res = {
-                    system_guard.write().run_readonly(
-                        (
-                            audience,
-                            maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
-                        ),
-                        world_ref,
-                    )
                 };
 
                 if res.is_err() {
@@ -476,8 +464,7 @@ pub fn decision_engine(
                     Some(system_guard) => {
                         let system_state = system_guard.write();
                         
-                        #[cfg(all(feature = "std", not(feature = "nostd_support")))]
-                        {
+                        let res = {
                             let res = system_state
                                 .map(|mut consideration_system| {
                                     consideration_system.run_readonly(
@@ -504,19 +491,6 @@ pub fn decision_engine(
                             };
 
                             res.unwrap()
-                        }
-
-                        #[cfg(all(feature = "nostd_support"))]
-                        let res = {
-                            let mut consideration_system = system_state;
-                            consideration_system.run_readonly(
-                            (
-                                    audience.entity(),
-                                    maybe_pawn.clone().map(|p| p.to_entity()).flatten(),
-                                    ctx_ref.clone(),
-                                ),
-                                world_ref,
-                            )
                         };
 
                         if res.is_err() {
@@ -525,13 +499,13 @@ pub fn decision_engine(
                         };
 
                         let raw_score = match res {
-                            Err(e) => {
+                            Err(_err) => {
                                 #[cfg(feature = "logging")]
                                 bevy::log::error!(
                                     "decision_engine: AI {:?} - Consideration '{:}' errored: {:?}", 
                                     &audience, 
                                     &cons.consideration_name, 
-                                    &e
+                                    &_err
                                 );
                                 curr_score = types::MIN_CONSIDERATION_SCORE;
                                 break;

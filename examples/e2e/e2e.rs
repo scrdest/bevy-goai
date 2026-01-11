@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{platform, prelude::*};
 
 // These two imports should keep you covered for day-to-day usage.
 // The CortexPlugin is in the Prelude with the right features enabled, but it doesn't work here fsr. 
@@ -388,9 +388,8 @@ fn main() {
     bevy::log::info!("All actions finished - Bevy app exited successfully. Exiting Cortex shortly...");
     // Delay the exit to let people using one-off terminal windows see what's going on.
     let mut counter = 0u32;
-    while counter < 1_000 {
+    while counter < 100 {
         counter += 1;
-        #[cfg(feature = "std")]
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        platform::thread::sleep(core::time::Duration::from_millis(100));
     }
 }

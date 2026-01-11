@@ -429,7 +429,7 @@ pub fn actiontracker_done_cleanup_system(
     // #[cfg(feature = "logging")]
     // bevy::log::debug!("Processing ActionTracker cleanup...");
 
-    for (entity, tracker, state) in query.iter() {
+    for (entity, _tracker, state) in query.iter() {
         let is_done = match state.0 {
             ActionState::Succeeded => true,
             ActionState::Failed => true,
@@ -438,13 +438,13 @@ pub fn actiontracker_done_cleanup_system(
         };
 
         #[cfg(feature = "logging")]
-        bevy::log::debug!("ActionTrackerCleanup: {:?} is in state {:?} (done: {:?}).", tracker.0.action.name, state.0, is_done);
+        bevy::log::debug!("ActionTrackerCleanup: {:?} is in state {:?} (done: {:?}).", _tracker.0.action.name, state.0, is_done);
 
         if is_done {
             #[cfg(feature = "logging")]
             bevy::log::info!(
                 "ActionTrackerCleanup: Action {:?} of AI {:?} finished, cleaning up the Tracker", 
-                tracker.0.action.name, entity
+                _tracker.0.action.name, entity
             );
             commands.trigger(ActionTrackerDespawnRequested {
                 entity: entity

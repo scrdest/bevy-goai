@@ -1518,6 +1518,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "cortex-actionset-loader",
+ "cortex-api",
  "cortex-bevy-plugin",
  "cortex-core",
  "cortex-test-plugin",
@@ -1540,6 +1541,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cortex-api"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "cortex-bevy-plugin",
+ "cortex-core",
+]
+
+[[package]]
 name = "cortex-bevy-plugin"
 version = "0.1.0"
 dependencies = [
@@ -1554,7 +1564,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "serde",
- "spin 0.10.0",
 ]
 
 [[package]]
@@ -3529,7 +3538,6 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 dependencies = [
- "lock_api",
  "portable-atomic",
 ]
 

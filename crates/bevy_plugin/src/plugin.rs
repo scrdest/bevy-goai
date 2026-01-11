@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use cortex_core::actions;
 use cortex_core::action_runtime;
 use cortex_core::considerations;
 use cortex_core::context_fetchers;
@@ -20,6 +21,7 @@ impl Plugin for CortexPlugin {
 
         app
         .add_plugins((
+            actions::ActionHandlerPlugin,
             context_fetchers::ContextFetcherPlugin, 
             considerations::ConsiderationPlugin,
         ))

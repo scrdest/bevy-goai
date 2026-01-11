@@ -269,3 +269,14 @@ impl AcceptsActionHandlerRegistrations for World {
         self
     }
 }
+
+pub struct ActionHandlerPlugin;
+
+impl Plugin for ActionHandlerPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            // Technically unnecessary, but will give users saner error messages if we pre-initialize:
+            .init_resource::<ActionHandlerKeyToSystemMap>()
+        ;
+    }
+}

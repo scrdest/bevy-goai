@@ -1,8 +1,6 @@
-extern crate alloc;
-use alloc::sync::Arc;
-use alloc::string::String;
-
 use bevy::ecs::resource::Resource;
+use bevy::platform::prelude::String;
+use bevy::platform::sync::Arc;
 
 #[derive(Debug)]
 pub enum DynResolutionError {
