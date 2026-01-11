@@ -21,7 +21,7 @@ pub mod prelude {
     #[cfg(any(feature = "bevy_plugin", feature = "testing"))]
     pub use cortex_ai_bevy_plugin::CortexPlugin;
 
-    #[cfg(any(feature = "cortex-test-plugin", feature = "testing"))]
+    #[cfg(any(feature = "cortex-ai-test-plugin", feature = "testing"))]
     pub use cortex_ai_test_plugin::CortexTestPlugin;
 
     #[cfg(feature = "actionset_loader")]
