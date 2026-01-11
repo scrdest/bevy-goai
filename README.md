@@ -41,10 +41,6 @@ For an explanation of the concepts used in the code below, see the [Glossary](GL
 use bevy::prelude::*;
 use cortex::prelude::*;
 
-// We'll filter on this simple marker Component being present.
-#[derive(Component)]
-pub struct DumbMarker;
-
 /// A simple 2d Position component for demo purposes only.
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct Position2d(Vec2);
@@ -54,6 +50,10 @@ impl Position2d {
         self.0.distance(other.0)
     }
 }
+
+// We'll filter on this simple marker Component being present.
+#[derive(Component)]
+pub struct DumbMarker;
 
 /// A simple ContextFetcher that returns Entities with a DumbMarker
 fn example_context_fetcher(
@@ -87,35 +87,17 @@ fn example_consideration(
     // This means the runtime will recognize this Context was bad and ignore it, 
     // but it can and will continue trying with other candidate Contexts.
     let pawn = match maybe_pawn {
-        None => {
-            bevy::log::error!(
-                "example_consideration_three requires a Pawn, but AI {:?} does not have one!",
-                ai, 
-            );
-            return None
-        },
+        None => return None,
         Some(p) => p,
     };
 
     let pawn_pos = match qry.get(pawn) {
-        Err(_) => {
-            bevy::log::error!(
-                "example_consideration_three requires the Pawn to have a Position2d, but Pawn {:?} of AI {:?} does not!",
-                pawn, ai,
-            );
-            return None
-        }
+        Err(_) => return None,
         Ok(pos) => pos,
     };
 
     let targ_pos = match qry.get(targ) {
-        Err(_) => {
-            bevy::log::error!(
-                "example_consideration_three requires the Context to have a Position2d, but Context {:?} for AI {:?} does not!",
-                targ, ai,
-            );
-            return None
-        }
+        Err(_) => return None,
         Ok(pos) => pos,
     };
 
