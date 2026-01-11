@@ -1,7 +1,7 @@
 use core::{num::NonZero, time::Duration};
 
 use bevy::{prelude::*};
-use cortex_bevy_plugin::CortexPlugin;
+use cortex_ai_bevy_plugin::CortexPlugin;
 
 #[derive(Resource)]
 struct AutoRunHeartbeatTimeout(core::time::Duration);

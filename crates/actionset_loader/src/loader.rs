@@ -4,8 +4,8 @@ use core::time::Duration;
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
 
-use cortex_core::actionset::{ActionSet};
-use cortex_core::types::CortexKvMap;
+use cortex_ai_core::actionset::{ActionSet};
+use cortex_ai_core::types::CortexKvMap;
 
 
 pub trait ActionSetLoaderBackend: Send + Sync + 'static {
@@ -191,7 +191,7 @@ impl<B: ActionSetLoaderBackend> AssetLoader for ActionSetLoader<B> {
     ) -> Result<Self::Asset, Self::Error> {
         #[cfg(feature = "logging")]
         bevy::log::debug!("ActionSetLoader running...");
-        let mut bytes = cortex_core::types::CortexList::new();
+        let mut bytes = cortex_ai_core::types::CortexList::new();
         let _ = reader.read_to_end(&mut bytes).await;
         let read = Self::from_slice(&bytes);
         let res: Result<ActionSet, Box<dyn core::error::Error + Send + Sync + 'static>> = read.map_err(|err| { 

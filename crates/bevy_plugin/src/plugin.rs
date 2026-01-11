@@ -1,10 +1,10 @@
 use bevy::prelude::*;
-use cortex_core::actions;
-use cortex_core::action_runtime;
-use cortex_core::considerations;
-use cortex_core::context_fetchers;
-use cortex_core::decision_loop;
-use cortex_core::smart_object;
+use cortex_ai_core::actions;
+use cortex_ai_core::action_runtime;
+use cortex_ai_core::considerations;
+use cortex_ai_core::context_fetchers;
+use cortex_ai_core::decision_loop;
+use cortex_ai_core::smart_object;
 
 #[cfg(feature = "include_actionset_loader")]
 use cortex_actionset_loader::ActionSetAssetPlugin;
@@ -27,7 +27,7 @@ impl Plugin for CortexPlugin {
         ))
         .init_resource::<action_runtime::UserDefaultActionTrackerSpawnConfig>()
         .init_resource::<smart_object::ActionSetStore>()
-        .add_message::<cortex_core::events::AiActionDispatchToUserCode>()
+        .add_message::<cortex_ai_core::events::AiActionDispatchToUserCode>()
         .add_observer(action_runtime::create_tracker_for_picked_action)
         .add_observer(action_runtime::actiontracker_triggered_spawner)
         .add_observer(action_runtime::actiontracker_triggered_despawner)

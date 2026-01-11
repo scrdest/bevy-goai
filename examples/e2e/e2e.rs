@@ -2,17 +2,17 @@ use bevy::{platform, prelude::*};
 
 // These two imports should keep you covered for day-to-day usage.
 // The CortexPlugin is in the Prelude with the right features enabled, but it doesn't work here fsr. 
-use cortex::prelude::*;
-use cortex_bevy_plugin::CortexPlugin;
+use cortex_ai::prelude::*;
+use cortex_ai_bevy_plugin::CortexPlugin;
 
 // These imports are needed for setting up stuff behind the scenes. 
 // In a normal setup, you usually shouldn't need to import these.
-use cortex::action_runtime::{ActionTrackerState};
-use cortex::actionset::ActionSet;
-use cortex::considerations::{ConsiderationData};
-use cortex::curves::{LinearCurve, UtilityCurveExt};
-use cortex::smart_object::{ActionSetStore};
-use cortex_test_plugin::CortexTestPlugin;
+use cortex_ai::action_runtime::{ActionTrackerState};
+use cortex_ai::actionset::ActionSet;
+use cortex_ai::considerations::{ConsiderationData};
+use cortex_ai::curves::{LinearCurve, UtilityCurveExt};
+use cortex_ai::smart_object::{ActionSetStore};
+use cortex_ai_test_plugin::CortexTestPlugin;
 
 const EXAMPLE_CONTEXT_FETCHER_NAME: &str = "e2e::ExampleCF";
 
@@ -208,14 +208,14 @@ fn setup_example_entity(
 
     let example_actionset = ActionSet {
         name: "ExampleActionSet".to_string(),
-        actions: cortex::types::CortexList::from(example_actions)
+        actions: cortex_ai::types::CortexList::from(example_actions)
     };
 
     actionset_store.map_by_name.insert(example_actionset.name.to_owned(), example_actionset);
 
     let new_controller = AIController::default();
     let new_sos = SmartObjects {
-        actionset_refs: ThreadSafeRef::new(cortex::types::CortexList::from(["ExampleActionSet".to_string()]))
+        actionset_refs: ThreadSafeRef::new(cortex_ai::types::CortexList::from(["ExampleActionSet".to_string()]))
     };
 
     let spawned = commands.spawn((

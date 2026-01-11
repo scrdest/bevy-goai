@@ -1,5 +1,5 @@
 [package]
-name = "cortex"
+name = "cortex-ai"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,17 +10,17 @@ members = [
 ]
 
 [dependencies]
-cortex-core = {version = "0.1.0", path = "crates/core"}
-cortex-bevy-plugin = {version = "0.1.0", path = "crates/bevy_plugin", optional = true}
-cortex-actionset-loader = {version = "0.1.0", path = "crates/actionset_loader", optional = true}
-cortex-test-plugin = {version = "0.1.0", path = "crates/test_plugin", optional = true}
-cortex-api = {version = "0.1.0", path = "crates/cortex_api", optional = true}
+cortex-ai-core = {version = "0.1.0", path = "crates/core"}
+cortex-ai-bevy-plugin = {version = "0.1.0", path = "crates/bevy_plugin", optional = true}
+cortex-ai-actionset-loader = {version = "0.1.0", path = "crates/actionset_loader", optional = true}
+cortex-ai-test-plugin = {version = "0.1.0", path = "crates/test_plugin", optional = true}
+cortex-ai-api = {version = "0.1.0", path = "crates/cortex_api", optional = true}
 
 [dev-dependencies]
 bevy = { version = "0.17.3", default-features = false, features = ["debug"]}
-cortex-core = {path = "crates/core", features = ["nostd_support"] }
-cortex-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
-cortex-test-plugin = {path = "crates/test_plugin", optional = false}
+cortex-ai-core = {path = "crates/core", features = ["nostd_support"] }
+cortex-ai-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
+cortex-ai-test-plugin = {path = "crates/test_plugin", optional = false}
 
 [features]
 default = ["logging", "std"]
@@ -28,14 +28,14 @@ default = ["logging", "std"]
 bevy_dynamic_linking = ["bevy/dynamic_linking"]
 
 std = [
-  "cortex-core/std",
-  "cortex-actionset-loader?/std"
+  "cortex-ai-core/std",
+  "cortex-ai-actionset-loader?/std"
 ]
 
 # Provides a way to load ActionSets as Assets from the filesystem.
 actionset_loader = [
-  "cortex-core/actionset_loader", 
-  "cortex-actionset-loader",
+  "cortex-ai-core/actionset_loader", 
+  "cortex-ai-actionset-loader",
 ]
 
 # Everything needed for an 'AI Server' setup of Cortex (i.e. using Cortex as a separate ECS world)
@@ -45,7 +45,7 @@ ai_server = [
 
 # Provides a plugin that sets up most of the basic integration for a 'Bevy-native' setup.
 bevy_plugin = [
-  "cortex-bevy-plugin"
+  "cortex-ai-bevy-plugin"
 ]
 
 # Everything needed for a 'Bevy-native' setup (i.e. running Cortex as a Plugin in a Bevy app)
@@ -55,47 +55,47 @@ bevy_native = [
 
 logging = [
   "bevy/bevy_log", 
-  "cortex-core/logging",
-  "cortex-actionset-loader?/logging"
+  "cortex-ai-core/logging",
+  "cortex-ai-actionset-loader?/logging"
 ]
 
 # Everything needed to run tests.
 testing = [
-  "cortex-test-plugin",
-  "cortex-bevy-plugin",
+  "cortex-ai-test-plugin",
+  "cortex-ai-bevy-plugin",
 ]
 
 nostd_support = [
-    "cortex-core/nostd_support",
-    "cortex-actionset-loader?/nostd_support",
+    "cortex-ai-core/nostd_support",
+    "cortex-ai-actionset-loader?/nostd_support",
 ]
 
 json_support = [
-    "cortex-actionset-loader?/json_support"
+    "cortex-ai-actionset-loader?/json_support"
 ]
 
 yaml_support = [
-    "cortex-actionset-loader?/yaml_support"
+    "cortex-ai-actionset-loader?/yaml_support"
 ]
 
 toml_support = [
-    "cortex-actionset-loader?/toml_support"
+    "cortex-ai-actionset-loader?/toml_support"
 ]
 
 cbor_support = [
-    "cortex-actionset-loader?/cbor_support"
+    "cortex-ai-actionset-loader?/cbor_support"
 ]
 
 msgpack_support = [
-    "cortex-actionset-loader?/msgpack_support"
+    "cortex-ai-actionset-loader?/msgpack_support"
 ]
 
 ron_support = [
-    "cortex-actionset-loader?/ron_support"
+    "cortex-ai-actionset-loader?/ron_support"
 ]
 
 postcard_support = [
-    "cortex-actionset-loader?/postcard_support"
+    "cortex-ai-actionset-loader?/postcard_support"
 ]
 
 all = [

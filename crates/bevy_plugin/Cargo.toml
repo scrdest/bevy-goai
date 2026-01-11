@@ -1,12 +1,12 @@
 [package]
-name = "cortex-bevy-plugin"
+name = "cortex-ai-bevy-plugin"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 bevy = { version = "0.17.3", default-features = false }
-cortex-core = {version = "0.1.0", path = "../core"}
-cortex-actionset-loader = {version = "0.1.0", path = "../actionset_loader", optional = true}
+cortex-ai-core = {version = "0.1.0", path = "../core"}
+cortex-ai-actionset-loader = {version = "0.1.0", path = "../actionset_loader", optional = true}
 
 [dev-dependencies]
 bevy = { version = "0.17.3", default-features = false, features = ["dynamic_linking"] }
@@ -16,13 +16,13 @@ default = []
 
 # Also adds the ActionSetAssetPlugin from cortex-actionset-loader for you.
 include_actionset_loader = [
-    "cortex-actionset-loader"
+    "cortex-ai-actionset-loader"
 ]
 
-logging = ["bevy/bevy_log", "cortex-core/logging", "cortex-actionset-loader?/logging"]
+logging = ["bevy/bevy_log", "cortex-ai-core/logging", "cortex-ai-actionset-loader?/logging"]
 
-std = ["cortex-core/std", "cortex-actionset-loader?/std"]
-nostd_support = ["cortex-core/nostd_support", "cortex-actionset-loader?/nostd_support"]
+std = ["cortex-ai-core/std", "cortex-ai-actionset-loader?/std"]
+nostd_support = ["cortex-ai-core/nostd_support", "cortex-ai-actionset-loader?/nostd_support"]
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

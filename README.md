@@ -39,7 +39,7 @@ For an explanation of the concepts used in the code below, see the [Glossary](GL
 ```rust
 // Include the building blocks from Bevy and Cortex.
 use bevy::prelude::*;
-use cortex::prelude::*;
+use cortex_ai::prelude::*;
 
 /// A simple 2d Position component for demo purposes only.
 #[derive(Component, Clone, Copy, Debug, Default)]

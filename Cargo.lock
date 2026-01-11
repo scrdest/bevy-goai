@@ -1513,24 +1513,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex"
+name = "cortex-ai"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "cortex-actionset-loader",
- "cortex-api",
- "cortex-bevy-plugin",
- "cortex-core",
- "cortex-test-plugin",
+ "cortex-ai-actionset-loader",
+ "cortex-ai-api",
+ "cortex-ai-bevy-plugin",
+ "cortex-ai-core",
+ "cortex-ai-test-plugin",
 ]
 
 [[package]]
-name = "cortex-actionset-loader"
+name = "cortex-ai-actionset-loader"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "ciborium",
- "cortex-core",
+ "cortex-ai-core",
  "postcard",
  "rmp-serde",
  "ron 0.12.0",
@@ -1541,25 +1541,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-api"
+name = "cortex-ai-api"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "cortex-bevy-plugin",
- "cortex-core",
+ "cortex-ai-bevy-plugin",
+ "cortex-ai-core",
 ]
 
 [[package]]
-name = "cortex-bevy-plugin"
+name = "cortex-ai-bevy-plugin"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "cortex-actionset-loader",
- "cortex-core",
+ "cortex-ai-actionset-loader",
+ "cortex-ai-core",
 ]
 
 [[package]]
-name = "cortex-core"
+name = "cortex-ai-core"
 version = "0.1.0"
 dependencies = [
  "bevy",
@@ -1567,11 +1567,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-test-plugin"
+name = "cortex-ai-test-plugin"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "cortex-core",
+ "cortex-ai-core",
 ]
 
 [[package]]
