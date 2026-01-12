@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/scrdest/Cranium/blob/master/LICENSE.md)
 [![Crates.io](https://img.shields.io/crates/v/cranium.svg)](https://crates.io/crates/cranium)
 [![Downloads](https://img.shields.io/crates/d/cranium.svg)](https://crates.io/crates/cranium)
+[![Docs](https://docs.rs/cranium/badge.svg)](https://docs.rs/cranium/latest/cranium/)
 
 **Mission Statement:** 
 
