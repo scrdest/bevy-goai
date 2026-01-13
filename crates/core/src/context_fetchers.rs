@@ -3,6 +3,9 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
+
+//! ContextFetchers - registerable Systems that find inputs (Contexts) for ActionTemplates.
+
 use bevy::prelude::*;
 use bevy::platform::prelude::{String, ToOwned};
 use bevy::platform::sync::Arc;

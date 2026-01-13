@@ -3,11 +3,13 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
+
+//! The main Component that marks an Entity as running AI calculations.
+
 use bevy::prelude::*;
 
-// AI Agent Core
-// The AIController is the main 'something running AI calculations' component.
-// 
+
+/// The AIController is the main 'something running AI calculations' marker. 
 #[derive(Component, Default)]
 pub struct AIController {}
 

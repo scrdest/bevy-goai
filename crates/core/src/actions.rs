@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
-//! Actions and ActionTemplates.
+//! Actions and ActionTemplates. Action = ActionTemplate + Context (from a ContextFetcher).
 //! 
 //! An Action is the ultimate output of the AI engine - it is largely what it sounds like, 
 //! a generic behavior of some sort, for example moving, attacking, using items, etc., 

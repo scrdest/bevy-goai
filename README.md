@@ -35,11 +35,24 @@ for NPCs in a project written in a deeply locked-down, decades-old game engine.
 * **Reactive** - Uses event-driven mechanisms to avoid paying for systems you don't use and allowing you to hook into the ones that you might be interested in in your own code.
 * **Portable** - Use in your Bevy app as a Plugin or drive it yourself from another engine. 
 * **Safe** - Typechecker-approved, uses thread-safe solutions where multithreading is relevant.
+* **MPL-2.0** - Both FOSS and commercial-friendly licensing, just don't gatekeep source forks.
 
+
+## Version compatibility
+
+| Bevy |              Cortex                 | 
+|------|-------------------------------------|
+| 0.18 | 0.2                                 |
+| 0.17 | 0.1, 0.2                            |
+
+
+In case of multiple comma-separated values, multiple versions support this Bevy version.
 
 ### Example 
 
 For an explanation of the concepts used in the code below, see the [Glossary](GLOSSARY.md)
+
+You may also want to have a look at the [Examples folder](examples) for additional executable examples.
 
 ```rust
 // Include the building blocks from Bevy and Cranium.

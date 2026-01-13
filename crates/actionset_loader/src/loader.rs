@@ -14,7 +14,7 @@ use cranium_core::actionset::{ActionSet};
 use cranium_core::types::CraniumKvMap;
 
 
-pub trait ActionSetLoaderBackend: Send + Sync + 'static {
+pub trait ActionSetLoaderBackend: Send + Sync + TypePath + 'static {
     /// What type does the loader return as a loader on error. 
     type Error: core::error::Error + Send + Sync + 'static;
 
@@ -31,7 +31,7 @@ pub trait ActionSetLoaderBackend: Send + Sync + 'static {
 pub mod json_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct JsonActionSetLoader;
 
     impl ActionSetLoaderBackend for JsonActionSetLoader {
@@ -52,7 +52,7 @@ pub mod json_support {
 pub mod toml_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct TomlActionSetLoader;
 
     impl ActionSetLoaderBackend for TomlActionSetLoader {
@@ -73,7 +73,7 @@ pub mod toml_support {
 pub mod msgpack_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct MsgpackActionSetLoader;
 
     impl ActionSetLoaderBackend for MsgpackActionSetLoader {
@@ -94,7 +94,7 @@ pub mod msgpack_support {
 pub mod cbor_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct CborActionSetLoader;
 
     impl ActionSetLoaderBackend for CborActionSetLoader {
@@ -115,7 +115,7 @@ pub mod cbor_support {
 pub mod ron_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct RonActionSetLoader;
 
     impl ActionSetLoaderBackend for RonActionSetLoader {
@@ -136,7 +136,7 @@ pub mod ron_support {
 pub mod yaml_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct YamlActionSetLoader;
 
     impl ActionSetLoaderBackend for YamlActionSetLoader {
@@ -157,7 +157,7 @@ pub mod yaml_support {
 pub mod postcard_support {
     use super::{ActionSetLoaderBackend, ActionSet};
 
-    #[derive(Default)]
+    #[derive(Default, bevy::prelude::Reflect)]
     pub struct PostcardActionSetLoader;
 
     impl ActionSetLoaderBackend for PostcardActionSetLoader {
@@ -175,7 +175,7 @@ pub mod postcard_support {
 
 
 // Asset loader
-#[derive(Default)]
+#[derive(Default, bevy::prelude::Reflect)]
 pub struct ActionSetLoader<B: ActionSetLoaderBackend>(PhantomData<B>);
 
 impl<B: ActionSetLoaderBackend> ActionSetLoader<B> {
@@ -318,7 +318,7 @@ fn cleanup_timers_for_loaded_actionsets(
 }
 
 
-#[derive(Default)]
+#[derive(Default, bevy::prelude::Reflect)]
 pub struct ActionSetAssetPlugin<B: ActionSetLoaderBackend>(PhantomData<B>);
 
 

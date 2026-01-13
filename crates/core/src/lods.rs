@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
-//! This module defines stuff to do with AI LODs (Level of Detail).
+//! AI LOD (Level of Detail) system for optimizing processing in complex worlds.
 //! 
 //! AI logic tends to be a 'hot and heavy' System - resource-heavy and frequently running. 
 //! This creates a scaling problem, creating a cap on the number of AIs that can be active in the world.

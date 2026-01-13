@@ -1,7 +1,7 @@
 [package]
 name = "cranium"
 description = "A fast, modular, no_std-friendly, batteries-included library for Game AI written in Rust."
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MPL-2.0"
 keywords = ["ai", "gamedev", "utility-ai", "bevy"]
@@ -16,14 +16,14 @@ members = [
 ]
 
 [dependencies]
-cranium-core = {version = "0.1.0", path = "crates/core"}
-cranium-bevy-plugin = {version = "0.1.0", path = "crates/bevy_plugin", optional = true}
-cranium-actionset-loader = {version = "0.1.0", path = "crates/actionset_loader", optional = true}
-cranium-test-plugin = {version = "0.1.0", path = "crates/test_plugin", optional = true}
-cranium-api = {version = "0.1.0", path = "crates/cortex_api", optional = true}
+cranium-core = {version = ">=0.1, <=0.2", path = "crates/core"}
+cranium-bevy-plugin = {version = ">=0.1, <=0.2", path = "crates/bevy_plugin", optional = true}
+cranium-actionset-loader = {version = "0.2.0", path = "crates/actionset_loader", optional = true}
+cranium-test-plugin = {version = "0.2.0", path = "crates/test_plugin", optional = true}
+cranium-api = {version = "0.2.0", path = "crates/cortex_api", optional = true}
 
 [dev-dependencies]
-bevy = { version = "0.17.3", default-features = false, features = ["debug"]}
+bevy = { version = ">=0.17.0, <0.19.0", default-features = false, features = ["debug"]}
 cranium-core = {path = "crates/core", features = ["nostd_support"] }
 cranium-bevy-plugin = {path = "crates/bevy_plugin", optional = false}
 cranium-test-plugin = {path = "crates/test_plugin", optional = false}

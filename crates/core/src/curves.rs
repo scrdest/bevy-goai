@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
-//! This module defines stuff to do with Utility Curves.
+//! Utility Curves - pure functions on a unit interval that modulate Consideration responses.
 //! 
 //! There is nothing particularly special or complex about these; 
 //! they are, by and large, a subset of Bevy's generic Curves. 

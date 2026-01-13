@@ -3,6 +3,9 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
+
+//! Errors and error-handling.
+
 use bevy::ecs::resource::Resource;
 use bevy::platform::prelude::String;
 use bevy::platform::sync::Arc;

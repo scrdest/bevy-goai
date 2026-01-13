@@ -3,9 +3,13 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
+
+//! SmartObjects - objects exposing ActionTemplates to compatible AIs, as made famous by The Sims.
+
 use bevy::prelude::*;
 use crate::actionset::ActionSet;
 use crate::types;
+
 
 // The overall design looks like this:
 // 1) Each AI has 0+ (though practically speaking 1+) SmartObjects associated with it at a given moment.

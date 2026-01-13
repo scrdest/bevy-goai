@@ -3,6 +3,9 @@ This Source Code Form is subject to the terms of the Mozilla Public License, v. 
 If a copy of the MPL was not distributed with this file, 
 You can obtain one at https://mozilla.org/MPL/2.0/. 
 */
+
+//! Wrapper for Entities to display them more nicely, mainly for logging purposes.
+
 use bevy::platform::prelude::{String};
 
 /// A convenient type wrapping Entity with an optional Name.
