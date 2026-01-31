@@ -7,6 +7,7 @@ You can obtain one at https://mozilla.org/MPL/2.0/.
 use bevy::prelude::*;
 use cranium_core::actions;
 use cranium_core::action_runtime;
+use cranium_core::action_state;
 use cranium_core::considerations;
 use cranium_core::context_fetchers;
 use cranium_core::decision_loop;
@@ -28,6 +29,7 @@ impl Plugin for CraniumPlugin {
         app
         .add_plugins((
             actions::ActionHandlerPlugin,
+            action_state::ActionStateUpdatesPlugin,
             context_fetchers::ContextFetcherPlugin, 
             considerations::ConsiderationPlugin,
         ))

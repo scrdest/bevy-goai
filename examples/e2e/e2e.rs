@@ -48,7 +48,7 @@ fn example_action(
     associated_ai_qry: Query<NameOrEntity, With<AIController>>,
     context_data_qry: Query<&ExampleStateMapContextComponent>,
     mut tracker_state_qry: Query<&mut ActionTrackerState>,
-    mut commands: Commands, 
+    mut state_writer: MessageWriter<crate::action_state::AiActionStateChangeRequest>,
 ) {
     let event = trigger.event();
     bevy::log::debug!("example_action: Running, trigger: {:?}", event);
@@ -103,26 +103,22 @@ fn example_action(
         Some(new_state) => new_state
     };
 
-    bevy::log::info!("example_action for AI {:?}: New state is {:?}", ai_owner, new);
+    bevy::log::info!("example_action for AI {:?}: Requesting state change to {:?}", ai_owner, new);
 
-    match maybe_tracker_state {
-        Err(err) => {
-            bevy::log::debug!("example_action: ActionTracker does not exist: {:?}", err);
-            match commands.get_entity(ai_entity) {
-                Err(err) => {
-                    bevy::log::error!("AI {:?} does not exist??? - {:?}", ai_entity, err);
-                }
-                Ok(mut cmds) => {
-                    bevy::log::debug!("Inserting new ActionState for AI {:?} - {:?}", ai_entity, new);
-                    cmds.insert(ActionTrackerState(*new));
-                }
-            }
-        }
-        Ok(mut state) => { 
-            bevy::log::debug!("example_action for AI {:?}: Updating the state to new value {:?}", ai_owner, new);
-            state.set_state(*new);
-        },
-    }
+    state_writer.write(crate::action_state::AiActionStateChangeRequest {
+        entity: event.entity,
+        action: "example_action".to_string(),
+        to_state: *new,
+    });
+
+}
+
+
+fn action_state_change_observer(
+    trigger: On<crate::action_state::AiActionStateChange>,
+) {
+    let event = trigger.event();
+    bevy::log::info!("{:?} for AI {:?}: New state is {:?}", event.action, event.entity, event.to_state);
 }
 
 
@@ -384,9 +380,12 @@ fn main() {
         setup_example_entity, 
         setup_default_action_tracker_config,
     ))
-
+    
     // Setting up an Observer for our Action.
     .add_observer(example_action)
+
+    // Adds a logging callback to let us know how and when the Action State changes.
+    .add_observer(action_state_change_observer)
     ;
 
     app.run();

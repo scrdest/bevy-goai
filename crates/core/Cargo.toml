@@ -1,7 +1,7 @@
 [package]
 name = "cranium-core"
 description = "Core code for a fast, modular, no_std-friendly, batteries-included library for Game AI written in Rust."
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MPL-2.0"
 keywords = ["ai", "gamedev", "utility-ai", "bevy"]

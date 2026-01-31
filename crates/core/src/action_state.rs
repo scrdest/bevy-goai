@@ -6,7 +6,10 @@ You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The values used by the Action Runtime to track the state of AI Actions.
 
+use bevy::prelude::*;
 use bevy::{platform::collections::Equivalent, reflect::Reflect};
+
+use crate::{types, action_runtime::ActionTrackerState};
 
 #[cfg(any(feature = "actionset_loader"))]
 use serde::{Deserialize, Serialize};
@@ -97,5 +100,99 @@ impl ActionState {
 impl Equivalent<ActionState> for &ActionState {
     fn equivalent(&self, key: &ActionState) -> bool {
         self == &key
+    }
+}
+
+
+/// 
+#[derive(Message)]
+pub struct AiActionStateChangeRequest {
+    pub entity: Entity,
+    pub action: types::ActionKey,
+    pub to_state: crate::action_state::ActionState,
+}
+
+
+/// Signals that an Action has transitioned between two states: from_state -> to_state.
+#[derive(EntityEvent)]
+pub struct AiActionStateChange {
+    pub entity: Entity,
+    pub action: types::ActionKey,
+    pub from_state: Option<crate::action_state::ActionState>,
+    pub to_state: crate::action_state::ActionState,
+}
+
+/// A System that processes all pending AiActionStateChangeRequest and applies them. 
+/// Can be scheduled as a System or (via `action_state_update_handler_observer()`) as an Observer.
+pub fn action_state_update_handler(
+    mut request_reader: MessageReader<AiActionStateChangeRequest>,
+    mut tracker_state_qry: Query<&mut ActionTrackerState>,
+    mut commands: Commands,
+) {
+    request_reader.read().for_each(|msg| {
+        let maybe_tracker_state = tracker_state_qry.get_mut(msg.entity);
+
+        match maybe_tracker_state {
+            Err(err) => {
+                bevy::log::debug!("{:?}: ActionTracker does not exist: {:?}", &msg.action, err);
+                match commands.get_entity(msg.entity) {
+                    Err(err) => {
+                        bevy::log::error!("{:?}: AI {:?} does not exist??? - {:?}", &msg.action, msg.entity, err);
+                    }
+                    Ok(mut cmds) => {
+                        bevy::log::debug!("{:?}: Inserting new ActionState for AI {:?} - {:?}", &msg.action, msg.entity, &msg.to_state);
+                        cmds.trigger(|ent| AiActionStateChange {
+                            action: msg.action.clone(),
+                            entity: ent,
+                            from_state: None, 
+                            to_state: msg.to_state.clone(),
+                        });
+                        cmds.insert(ActionTrackerState(msg.to_state));
+                    }
+                }
+            }
+            Ok(mut state) => { 
+                bevy::log::debug!("example_action for AI {:?}: Updating the state to new value {:?}", msg.entity, msg.to_state);
+                let current = state.get_state().clone();
+                commands.trigger(AiActionStateChange {
+                    action: msg.action.clone(),
+                    entity: msg.entity,
+                    from_state: Some(current), 
+                    to_state: msg.to_state.clone(),
+                });
+                state.set_state(msg.to_state);
+            },
+        }
+    });
+}
+
+
+/// An event that 
+#[derive(Event)]
+pub struct ProcessActionStateUpdatesSignal;
+
+
+/// An Observer wrapper for `action_state_update_handler()`, triggered by ProcessActionStateUpdatesSignal. 
+/// Can be used as a 'sparse' replacement for normal Schedule-based processing or in parallel to it as a 
+/// way to force a flush of the buffered AiActionStateChangeRequests.
+pub fn action_state_update_handler_observer(
+    _trigger: On<ProcessActionStateUpdatesSignal>,
+    request_reader: MessageReader<AiActionStateChangeRequest>,
+    tracker_state_qry: Query<&mut ActionTrackerState>,
+    commands: Commands,
+) {
+    action_state_update_handler(request_reader, tracker_state_qry, commands);
+}
+
+
+pub struct ActionStateUpdatesPlugin;
+
+impl Plugin for ActionStateUpdatesPlugin {
+    fn build(&self, app: &mut App) {
+        app
+        .add_message::<AiActionStateChangeRequest>()
+        .add_observer(action_state_update_handler_observer)
+        .add_systems(FixedUpdate, crate::action_state::action_state_update_handler)
+        ;
     }
 }

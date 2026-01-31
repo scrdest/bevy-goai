@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "cranium"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "cranium-actionset-loader",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "cranium-actionset-loader"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "ciborium",
@@ -1548,7 +1548,7 @@ dependencies = [
 
 [[package]]
 name = "cranium-api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "cranium-bevy-plugin",
@@ -1557,7 +1557,7 @@ dependencies = [
 
 [[package]]
 name = "cranium-bevy-plugin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "cranium-actionset-loader",
@@ -1566,7 +1566,7 @@ dependencies = [
 
 [[package]]
 name = "cranium-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "serde",
@@ -1574,7 +1574,7 @@ dependencies = [
 
 [[package]]
 name = "cranium-test-plugin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bevy",
  "cranium-core",
